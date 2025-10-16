@@ -1,12 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_feature_analyzer/music_feature_analyzer.dart';
+import 'package:music_feature_analyzer/src/models/song_features.dart';
+import 'package:music_feature_analyzer/src/models/song_model.dart';
+import 'package:music_feature_analyzer/src/services/feature_extractor.dart';
 
 void main() {
   group('Music Feature Analyzer Tests', () {
     test('should initialize without errors', () async {
       // This is a basic test to ensure the package can be imported and initialized
       expect(MusicFeatureAnalyzer.isInitialized, false);
-      
+
       // Note: We can't actually test initialization without real model files
       // but we can test that the class exists and methods are callable
       expect(MusicFeatureAnalyzer.getStats, isA<Function>());
@@ -23,7 +26,7 @@ void main() {
         duration: 180,
         filePath: '/test/path.mp3',
       );
-      
+
       expect(song.id, 'test');
       expect(song.title, 'Test Song');
       expect(song.artist, 'Test Artist');
@@ -64,7 +67,7 @@ void main() {
         analyzerVersion: '1.0.0',
         confidence: 0.9,
       );
-      
+
       expect(features.tempo, 'Medium');
       expect(features.beat, 'Strong');
       expect(features.energy, 'High');
@@ -102,7 +105,7 @@ void main() {
         maxInstruments: 10,
         verboseLogging: false,
       );
-      
+
       expect(options.enableYAMNet, true);
       expect(options.enableSignalProcessing, true);
       expect(options.enableSpectralAnalysis, true);
@@ -117,18 +120,23 @@ void main() {
         successfulAnalyses: 95,
         failedAnalyses: 5,
         averageProcessingTime: 2.5,
+        lastAnalysis: DateTime.now(),
         genreDistribution: {'Rock': 30, 'Pop': 25, 'Jazz': 20},
         instrumentDistribution: {'Guitar': 40, 'Piano': 35, 'Drums': 25},
       );
-      
+
       expect(stats.totalSongs, 100);
       expect(stats.successfulAnalyses, 95);
       expect(stats.failedAnalyses, 5);
       expect(stats.averageProcessingTime, 2.5);
       expect(stats.genreDistribution, {'Rock': 30, 'Pop': 25, 'Jazz': 20});
-      expect(stats.instrumentDistribution, {'Guitar': 40, 'Piano': 35, 'Drums': 25});
-      expect(stats.successRate, 0.95);
-      expect(stats.failureRate, 0.05);
+      expect(stats.instrumentDistribution, {
+        'Guitar': 40,
+        'Piano': 35,
+        'Drums': 25,
+      });
+      expect(stats.successRate, 95.0);
+      expect(stats.failureRate, 5.0);
     });
   });
 }

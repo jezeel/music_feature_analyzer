@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:logger/logger.dart';
 import 'models/song_features.dart';
 import 'models/song_model.dart';
@@ -13,6 +14,7 @@ class MusicFeatureAnalyzer {
   static final Logger _logger = Logger();
   static FeatureExtractor? _extractor;
   static bool _isInitialized = false;
+  static bool _isBackgroundProcessing = false;
 
   /// Initialize the analyzer with required models and assets
   /// 
@@ -128,9 +130,178 @@ class MusicFeatureAnalyzer {
     return results;
   }
 
+  /// Extract features in background with isolate-based processing
+  /// 
+  /// This is the main background processing method that uses isolates
+  /// to prevent UI blocking during heavy feature extraction.
+  static Future<Map<String, SongFeatures?>> extractFeaturesInBackground(
+    List<String> filePaths, {
+    Function(int current, int total)? onProgress,
+    Function(String filePath, SongFeatures? features)? onSongUpdated,
+    Function()? onCompleted,
+    Function(String error)? onError,
+  }) async {
+    if (_isBackgroundProcessing) {
+      _logger.w('⚠️ Feature extraction already in progress');
+      return {};
+    }
+
+    if (!_isInitialized || _extractor == null) {
+      _logger.e('❌ Analyzer not initialized. Call initialize() first.');
+      return {};
+    }
+
+    _isBackgroundProcessing = true;
+    _logger.i('🎵 Starting UI-responsive background feature extraction for ${filePaths.length} songs...');
+    
+    try {
+      // Filter songs that need analysis (same as original)
+      final songsNeedingAnalysis = filePaths.where((filePath) {
+        // For now, assume all songs need analysis
+        // In a real implementation, you'd check if features already exist
+        return true;
+      }).toList();
+
+      if (songsNeedingAnalysis.isEmpty) {
+        _logger.i('✅ All songs already analyzed');
+        onCompleted?.call();
+        return {};
+      }
+
+      _logger.i('🎵 Found ${songsNeedingAnalysis.length} songs needing analysis');
+
+      // Process songs with UI responsiveness (same as original)
+      final results = await _processSongsWithUIResponsiveness(
+        songsNeedingAnalysis,
+        onSongUpdated,
+        onProgress,
+      );
+      
+      _logger.i('✅ UI-responsive background extraction completed');
+      onCompleted?.call();
+      return results;
+    } catch (e) {
+      _logger.e('❌ Error in UI-responsive background extraction: $e');
+      onError?.call(e.toString());
+      return {};
+    } finally {
+      _isBackgroundProcessing = false;
+    }
+  }
+
+  /// Extract features in isolate to prevent UI blocking
+  static Future<SongFeatures?> _extractFeaturesInIsolate(String filePath) async {
+    try {
+      // Create song model
+      final song = Song(
+        id: filePath.hashCode.toString(),
+        title: _getFileName(filePath),
+        artist: 'Unknown',
+        album: 'Unknown',
+        duration: 0,
+        filePath: filePath,
+        features: null,
+      );
+
+      // Use compute for isolate-based processing
+      return await compute(_extractFeaturesInIsolateHelper, song);
+    } catch (e) {
+      _logger.e('❌ Error in isolate processing: $e');
+      return null;
+    }
+  }
+
+  /// Helper function for isolate processing
+  static Future<SongFeatures?> _extractFeaturesInIsolateHelper(Song song) async {
+    try {
+      // Create a new extractor instance for the isolate
+      final extractor = FeatureExtractor();
+      await extractor.initialize();
+      
+      final features = await extractor.extractSongFeatures(song);
+      await extractor.dispose();
+      
+      return features;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Process songs with UI responsiveness using proper async scheduling (same as original)
+  static Future<Map<String, SongFeatures?>> _processSongsWithUIResponsiveness(
+    List<String> filePaths,
+    Function(String filePath, SongFeatures? features)? onSongUpdated,
+    Function(int current, int total)? onProgress,
+  ) async {
+    final results = <String, SongFeatures?>{};
+    
+    for (int i = 0; i < filePaths.length; i++) {
+      final filePath = filePaths[i];
+      
+      try {
+        // Call progress callback
+        onProgress?.call(i + 1, filePaths.length);
+        
+        _logger.i('🎵 Processing song ${i + 1}/${filePaths.length}: $filePath');
+        
+        // Use isolate for heavy processing
+        final features = await _extractFeaturesInIsolate(filePath);
+        
+        results[filePath] = features;
+        
+        // Call song updated callback
+        onSongUpdated?.call(filePath, features);
+        
+        if (features != null) {
+          _logger.d('✅ Features extracted for: ${_getFileName(filePath)}');
+        } else {
+          _logger.w('⚠️ Failed to extract features for: ${_getFileName(filePath)}');
+        }
+        
+        // Allow UI to update by yielding control (same as original)
+        await Future.delayed(Duration.zero);
+        
+      } catch (e) {
+        _logger.e('❌ Error processing song $filePath: $e');
+        results[filePath] = null;
+      }
+    }
+    
+    return results;
+  }
+
+  /// Get extraction progress (same as original)
+  static Map<String, dynamic> getExtractionProgress(List<String> allSongs) {
+    final total = allSongs.length;
+    
+    // For now, we can't check individual song features since we don't have access to Song objects
+    // This is a limitation of the package approach vs the original
+    // In a real implementation, you'd need to pass Song objects or check a database
+    
+    // Use statistics as fallback (same approach as original when features can't be checked)
+    final AnalysisStats stats;
+    if (_extractor != null) {
+      stats = _extractor!.getStats();
+    } else {
+      stats = AnalysisStats.empty();
+    }
+    final analyzed = stats.successfulAnalyses; // Only count successful analyses as "analyzed"
+    
+    return {
+      'totalSongs': total,
+      'analyzedSongs': analyzed,
+      'pendingSongs': total - analyzed,
+      'completionPercentage': total > 0 ? (analyzed / total * 100) : 0.0,
+    };
+  }
+
   /// Get analysis statistics
   static AnalysisStats getStats() {
-    return _extractor?.getStatistics() ?? AnalysisStats.empty();
+    if (_extractor != null) {
+      return _extractor!.getStats();
+    } else {
+      return AnalysisStats.empty();
+    }
   }
 
   /// Reset statistics
@@ -176,35 +347,3 @@ class AnalysisOptions {
   });
 }
 
-/// Analysis statistics
-class AnalysisStats {
-  final int totalSongs;
-  final int successfulAnalyses;
-  final int failedAnalyses;
-  final double averageProcessingTime;
-  final Map<String, int> genreDistribution;
-  final Map<String, int> instrumentDistribution;
-
-  const AnalysisStats({
-    required this.totalSongs,
-    required this.successfulAnalyses,
-    required this.failedAnalyses,
-    required this.averageProcessingTime,
-    required this.genreDistribution,
-    required this.instrumentDistribution,
-  });
-
-  factory AnalysisStats.empty() {
-    return const AnalysisStats(
-      totalSongs: 0,
-      successfulAnalyses: 0,
-      failedAnalyses: 0,
-      averageProcessingTime: 0.0,
-      genreDistribution: {},
-      instrumentDistribution: {},
-    );
-  }
-
-  double get successRate => totalSongs > 0 ? successfulAnalyses / totalSongs : 0.0;
-  double get failureRate => totalSongs > 0 ? failedAnalyses / totalSongs : 0.0;
-}

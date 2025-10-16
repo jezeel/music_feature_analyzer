@@ -27,11 +27,7 @@
 
 library music_feature_analyzer;
 
-export 'src/models/song_features.dart';
-export 'src/models/song_model.dart';
-export 'src/services/feature_extractor.dart';
-export 'src/services/yamnet_helper.dart' hide YAMNetResults;
-export 'src/services/signal_processor.dart' hide SignalProcessingResults;
-export 'src/utils/audio_utils.dart';
-export 'src/utils/math_utils.dart' hide Complex;
+export 'src/models/song_features.dart' hide SongFeatures;
+export 'src/models/song_model.dart' hide Song;
+export 'src/services/feature_extractor.dart' hide Complex, AnalysisStats;
 export 'src/music_feature_analyzer_base.dart';
