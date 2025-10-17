@@ -1,0 +1,11 @@
+# Ignore development files
+build/
+coverage/
+*.log
+*.tmp
+
+# Ignore test files that are not part of the public API
+test/
+
+# Ignore any remaining development documentation
+INTEGRATION_EXAMPLE.md

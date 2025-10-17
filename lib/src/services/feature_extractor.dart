@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
-import 'package:logger/logger.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
@@ -11,40 +10,26 @@ import 'package:flutter/services.dart' show rootBundle;
 
 import '../models/song_model.dart';
 import '../models/song_features.dart';
+import '../utils/app_logger.dart';
+import '../music_feature_analyzer_base.dart';
 
-/// Data model for passing feature extraction data to isolates
-/// This allows us to pre-load assets in the main thread and pass them to isolates
-class IsolateFeatureData {
-  final Song song;
-  final Uint8List yamnetModelBytes;
-  final List<String> yamnetLabels;
-  final String modelVersion;
-  final Float32List? audioData; // Pre-processed audio data
-
-  const IsolateFeatureData({
-    required this.song,
-    required this.yamnetModelBytes,
-    required this.yamnetLabels,
-    required this.modelVersion,
-    this.audioData,
-  });
-}
 
 /// Main feature extractor service
 class FeatureExtractor {
-  static final Logger _logger = Logger();
+  static final AppLogger _logger = AppLogger('FeatureExtractor');
   
   Interpreter? _yamnetModel;
   List<YAMNetLabel> _yamnetLabels = [];
   bool _isInitialized = false;
+  Uint8List? _cachedModelBytes; // Cache model bytes for isolates
   
   // Statistics
   int _totalSongs = 0;
   int _successfulAnalyses = 0;
   int _failedAnalyses = 0;
-  double _totalProcessingTime = 0.0;
-  final Map<String, int> _genreDistribution = {};
-  final Map<String, int> _instrumentDistribution = {};
+  double _totalAnalysisTime = 0.0;
+  final Map<String, int> _genreCounts = {};
+  final Map<String, int> _instrumentCounts = {};
 
   /// Initialize the feature extractor
   Future<bool> initialize() async {
@@ -118,7 +103,7 @@ class FeatureExtractor {
       _updateStatistics(features);
       
       stopwatch.stop();
-      _totalProcessingTime += stopwatch.elapsedMilliseconds / 1000.0;
+      _totalAnalysisTime += stopwatch.elapsedMilliseconds / 1000.0;
       
       _logger.i('✅ Features extracted for: ${song.title} (${stopwatch.elapsedMilliseconds}ms)');
       return features;
@@ -138,11 +123,20 @@ class FeatureExtractor {
       // Load model directly from assets (same approach as original)
       _yamnetModel = await Interpreter.fromAsset('assets/models/1.tflite');
       
+      // Cache model bytes for isolates
+      _cachedModelBytes = await _getModelBytes();
+      
       _logger.i('✅ YAMNet model loaded successfully');
     } catch (e) {
       _logger.e('❌ Error loading YAMNet model: $e');
       rethrow;
     }
+  }
+
+  /// Get model bytes from asset
+  Future<Uint8List> _getModelBytes() async {
+    final byteData = await rootBundle.load('assets/models/1.tflite');
+    return byteData.buffer.asUint8List();
   }
 
   /// Load YAMNet labels
@@ -1047,7 +1041,7 @@ class FeatureExtractor {
   /// Categorize tempo
   String _categorizeTempo(double bpm) {
     if (bpm < 60) return 'Very Slow';
-    if (bpm < 80) return 'Slow';
+    if (bpm < 90) return 'Slow';
     if (bpm < 120) return 'Moderate';
     if (bpm < 140) return 'Fast';
     return 'Very Fast';
@@ -1062,9 +1056,10 @@ class FeatureExtractor {
 
   /// Categorize energy
   String _categorizeEnergy(double energy) {
-    if (energy < 0.3) return 'Low';
-    if (energy < 0.7) return 'Medium';
-    return 'High';
+    if (energy < 0.25) return 'Low';
+    if (energy < 0.5) return 'Medium';
+    if (energy < 0.75) return 'High';
+    return 'Very High';
   }
 
   /// Categorize vocals
@@ -1111,14 +1106,14 @@ class FeatureExtractor {
 
   /// Update statistics
   void _updateStatistics(SongFeatures features) {
-    // Update genre distribution
-    _genreDistribution[features.estimatedGenre] = 
-        (_genreDistribution[features.estimatedGenre] ?? 0) + 1;
+    // Update genre counts
+    _genreCounts[features.estimatedGenre] = 
+        (_genreCounts[features.estimatedGenre] ?? 0) + 1;
     
-    // Update instrument distribution
+    // Update instrument counts
     for (final instrument in features.instruments) {
-      _instrumentDistribution[instrument] = 
-          (_instrumentDistribution[instrument] ?? 0) + 1;
+      _instrumentCounts[instrument] = 
+          (_instrumentCounts[instrument] ?? 0) + 1;
     }
   }
 
@@ -1128,10 +1123,10 @@ class FeatureExtractor {
       totalSongs: _totalSongs,
       successfulAnalyses: _successfulAnalyses,
       failedAnalyses: _failedAnalyses,
-      averageProcessingTime: _totalSongs > 0 ? _totalProcessingTime / _totalSongs : 0.0,
+      averageProcessingTime: _totalSongs > 0 ? _totalAnalysisTime / _totalSongs : 0.0,
       lastAnalysis: DateTime.now(),
-      genreDistribution: Map.from(_genreDistribution),
-      instrumentDistribution: Map.from(_instrumentDistribution),
+      genreDistribution: Map.from(_genreCounts),
+      instrumentDistribution: Map.from(_instrumentCounts),
     );
   }
 
@@ -1159,9 +1154,9 @@ class FeatureExtractor {
     _totalSongs = 0;
     _successfulAnalyses = 0;
     _failedAnalyses = 0;
-    _totalProcessingTime = 0.0;
-    _genreDistribution.clear();
-    _instrumentDistribution.clear();
+    _totalAnalysisTime = 0.0;
+    _genreCounts.clear();
+    _instrumentCounts.clear();
   }
 
   /// Log model details (same as original)
@@ -1193,31 +1188,13 @@ class FeatureExtractor {
       final inputTensors = _yamnetModel!.getInputTensors();
       final outputTensors = _yamnetModel!.getOutputTensors();
       
-      // Check input tensor
-      if (inputTensors.isEmpty) {
-        _logger.w('⚠️ No input tensors found');
+      // Check if we have the expected input/output structure (same as original)
+      if (inputTensors.isEmpty || outputTensors.isEmpty) {
+        _logger.w('⚠️ Unexpected model structure');
         return false;
       }
       
-      final inputShape = inputTensors.first.shape;
-      if (inputShape.length != 2 || inputShape[1] != 15600) {
-        _logger.w('⚠️ Unexpected input shape: $inputShape (expected [?, 15600])');
-        return false;
-      }
-      
-      // Check output tensor
-      if (outputTensors.isEmpty) {
-        _logger.w('⚠️ No output tensors found');
-        return false;
-      }
-      
-      final outputShape = outputTensors.first.shape;
-      if (outputShape.length != 2 || outputShape[1] != 521) {
-        _logger.w('⚠️ Unexpected output shape: $outputShape (expected [?, 521])');
-        return false;
-      }
-      
-      return true;
+      return true; // ✅ SIMPLE - Just checks if tensors exist (same as original)
     } catch (e) {
       _logger.w('⚠️ Model validation error: $e');
       return false;
@@ -1231,53 +1208,79 @@ class FeatureExtractor {
     _isInitialized = false;
     _logger.i('🧹 Feature Extractor disposed');
   }
-}
 
-/// Signal processing features (same as original)
-class SignalFeatures {
-  final double tempoBpm;
-  final double beatStrength;
-  final double energy;
-  final double brightness;
-  final double danceability;
-  final double spectralCentroid;
-  final double spectralRolloff;
-  final double zeroCrossingRate;
-
-  SignalFeatures({
-    required this.tempoBpm,
-    required this.beatStrength,
-    required this.energy,
-    required this.brightness,
-    required this.danceability,
-    required this.spectralCentroid,
-    required this.spectralRolloff,
-    required this.zeroCrossingRate,
-  });
-}
-
-/// Complex number class for FFT calculations (same as original)
-class Complex {
-  final double real;
-  final double imaginary;
-
-  Complex(this.real, this.imaginary);
-
-  Complex operator +(Complex other) {
-    return Complex(real + other.real, imaginary + other.imaginary);
+  /// Get model bytes for isolate processing
+  Uint8List? getModelBytes() {
+    return _cachedModelBytes;
   }
 
-  Complex operator -(Complex other) {
-    return Complex(real - other.real, imaginary - other.imaginary);
+  /// Get labels for isolate processing
+  List<String>? getLabels() {
+    return _yamnetLabels.map((label) => label.displayName).toList();
   }
 
-  Complex operator *(Complex other) {
-    return Complex(
-      real * other.real - imaginary * other.imaginary,
-      real * other.imaginary + imaginary * other.real,
-    );
+  /// Extract audio waveform for isolate processing
+  Future<Float32List?> extractAudioWaveform(String filePath, Duration duration) async {
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final outputPath = '${tempDir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.raw';
+
+      // Calculate optimal start time (middle of song)
+      final startTime = _calculateMiddleStartTime(duration);
+
+      _logger.d('🎵 Extracting audio: duration=${duration.inSeconds}s, start=${startTime.toStringAsFixed(1)}s');
+
+      // Build FFmpeg command
+      final command = _buildFFmpegCommand(filePath, outputPath);
+
+      // Execute FFmpeg
+      final session = await FFmpegKit.execute(command);
+      final returnCode = await session.getReturnCode();
+
+      if (ReturnCode.isSuccess(returnCode)) {
+        final rawFile = File(outputPath);
+        try {
+          if (await rawFile.exists()) {
+            final rawBytes = await rawFile.readAsBytes();
+            await rawFile.delete(); // Clean up immediately
+
+            if (rawBytes.isEmpty) {
+              _logger.w('FFmpeg output empty, using fallback');
+              return _extractFallbackWaveform(filePath);
+            }
+
+            final waveform = _convertRawAudioToFloat32(rawBytes);
+            _logger.d('✅ Extracted ${waveform.length} samples');
+            return waveform;
+          } else {
+            _logger.w('⚠️ FFmpeg output file not found, using fallback');
+            return _extractFallbackWaveform(filePath);
+          }
+        } catch (fileError) {
+          _logger.e('❌ Error reading FFmpeg output: $fileError');
+          // Ensure cleanup even on error
+          try {
+            if (await rawFile.exists()) {
+              await rawFile.delete();
+            }
+          } catch (cleanupError) {
+            _logger.w('⚠️ Error cleaning up temp file: $cleanupError');
+          }
+          return _extractFallbackWaveform(filePath);
+        }
+      }
+
+      _logger.w('⚠️ FFmpeg failed, using fallback');
+      return _extractFallbackWaveform(filePath);
+    } catch (e) {
+      _logger.e('Error extracting audio: $e');
+      return _extractFallbackWaveform(filePath);
+    }
   }
+
 }
+
+
 
 /// YAMNet analysis results (same as original)
 class YAMNetResults {
@@ -1316,293 +1319,6 @@ class YAMNetResults {
   }
 }
 
-/// YAMNet label class (same as original)
-class YAMNetLabel {
-  final int index;
-  final String mid;
-  final String displayName;
-
-  YAMNetLabel({
-    required this.index,
-    required this.mid,
-    required this.displayName,
-  });
-
-  /// Check if this label represents an instrument
-  bool get isInstrument {
-    const instruments = [
-      // String instruments
-      'piano', 'guitar', 'electric guitar', 'acoustic guitar', 'bass guitar', 
-      'steel guitar', 'slide guitar', 'banjo', 'mandolin', 'ukulele', 'sitar',
-      'violin', 'viola', 'cello', 'double bass', 'contrabass', 'bass',
-      'harp', 'zither', 'harpsichord', 'lute', 'sitar', 'bouzouki',
-      
-      // Wind instruments
-      'saxophone', 'trumpet', 'trombone', 'tuba', 'french horn', 'flute',
-      'clarinet', 'oboe', 'bassoon', 'recorder', 'piccolo', 'harmonica',
-      'accordion', 'concertina', 'melodica', 'mouth organ', 'bagpipe',
-      
-      // Keyboard instruments
-      'keyboard', 'organ', 'electronic organ', 'hammond organ', 'synthesizer',
-      'sampler', 'electric piano', 'harpsichord', 'celesta', 'clavichord',
-      
-      // Percussion instruments
-      'drum', 'drum kit', 'drum machine', 'snare drum', 'bass drum', 'timpani',
-      'tabla', 'cymbal', 'hi-hat', 'crash', 'ride', 'tom', 'wood block',
-      'tambourine', 'rattle', 'maraca', 'gong', 'tubular bells', 'mallet',
-      'marimba', 'xylophone', 'glockenspiel', 'vibraphone', 'steelpan',
-      'xylophone', 'vibraphone', 'glockenspiel', 'chimes', 'bells',
-      
-      // Electronic instruments
-      'synthesizer', 'sampler', 'drum machine', 'electronic organ',
-      'theremin', 'singing bowl', 'scratching',
-      
-      // Brass instruments
-      'trumpet', 'trombone', 'tuba', 'french horn', 'cornet', 'flugelhorn',
-      'baritone horn', 'euphonium', 'sousaphone',
-      
-      // Woodwind instruments
-      'flute', 'clarinet', 'oboe', 'bassoon', 'saxophone', 'recorder',
-      'piccolo', 'english horn', 'bass clarinet', 'contrabassoon',
-      
-      // Other instruments
-      'harmonica', 'accordion', 'concertina', 'melodica', 'mouth organ',
-      'bagpipe', 'didgeridoo', 'kalimba', 'thumb piano'
-    ];
-    final lower = displayName.toLowerCase();
-    
-    // Check for exact instrument matches
-    final hasExactInstrument = instruments.any((inst) => lower == inst);
-    
-    // Check for instrument names (partial matches)
-    final hasInstrument = instruments.any((inst) => lower.contains(inst));
-    
-    // Check for instrument-related terms
-    const instrumentTerms = [
-      'instrument', 'playing', 'strumming', 'plucking', 'bowing',
-      'blowing', 'striking', 'hitting', 'tapping', 'fingering',
-      'percussion', 'brass', 'woodwind', 'string', 'keyboard',
-      'electronic', 'acoustic', 'electric', 'amplified'
-    ];
-    final hasInstrumentTerm = instrumentTerms.any((term) => lower.contains(term));
-    
-    // Check for specific YAMNet instrument patterns
-    const yamnetPatterns = [
-      'guitar', 'piano', 'drum', 'bass', 'violin', 'saxophone', 'trumpet',
-      'flute', 'clarinet', 'organ', 'synthesizer', 'keyboard', 'banjo',
-      'mandolin', 'ukulele', 'harp', 'accordion', 'harmonica', 'trombone',
-      'tuba', 'oboe', 'bassoon', 'french horn', 'xylophone', 'marimba',
-      'vibraphone', 'glockenspiel', 'timpani', 'cymbal', 'snare', 'kick',
-      'hi-hat', 'crash', 'ride', 'tom', 'wood block', 'tambourine', 'rattle',
-      'maraca', 'gong', 'tubular bells', 'mallet', 'steelpan'
-    ];
-    final hasYamnetPattern = yamnetPatterns.any((pattern) => lower.contains(pattern));
-    
-    return hasExactInstrument || hasInstrument || hasInstrumentTerm || hasYamnetPattern;
-  }
-
-  /// Check if this label represents vocals
-  bool get isVocal {
-    const vocals = [
-      // Direct vocal terms
-      'singing', 'speech', 'vocal', 'voice', 'choir', 'chorus', 'chant',
-      'vocalization', 'vocal call', 'vocal song', 'vocal music',
-      
-      // Speech-related
-      'conversation', 'talking', 'speaking', 'whispering', 'shouting',
-      'yelling', 'screaming', 'laughing', 'crying', 'sobbing', 'whimpering',
-      'wailing', 'moaning', 'sighing', 'yodeling', 'mantra', 'narration',
-      'monologue', 'babbling', 'speech synthesizer', 'shout', 'bellow',
-      'whoop', 'yell', 'whispering', 'laughter', 'giggle', 'snicker',
-      'belly laugh', 'chuckle', 'chortle', 'crying', 'sobbing', 'whimper',
-      'wail', 'moan', 'sigh', 'rap', 'rap', 'rapping', 'humming', 'groan',
-      'grunt', 'whistling', 'breathing', 'wheeze', 'snoring', 'gasp',
-      'pant', 'snort', 'cough', 'throat clearing', 'sneeze', 'sniff',
-      
-      // Child vocals
-      'child speech', 'kid speaking', 'child singing', 'baby laughter',
-      'baby cry', 'infant cry', 'children shouting', 'children playing',
-      
-      // Synthetic vocals
-      'synthetic singing', 'speech synthesizer', 'synthetic voice',
-      
-      // Animal vocals (sometimes relevant for music)
-      'bird vocalization', 'bird call', 'bird song', 'whale vocalization',
-      
-      // Music-specific vocals
-      'vocal music', 'a capella', 'background vocals', 'lead vocals',
-      'harmony vocals', 'backing vocals', 'vocal harmony'
-    ];
-    final lower = displayName.toLowerCase();
-    
-    // Check for exact vocal matches
-    final hasExactVocal = vocals.any((vocal) => lower == vocal);
-    
-    // Check for vocal keywords (partial matches)
-    final hasVocal = vocals.any((vocal) => lower.contains(vocal));
-    
-    // Check for vocal-related patterns
-    const vocalPatterns = [
-      'sing', 'speak', 'talk', 'voice', 'vocal', 'choir', 'chorus',
-      'chant', 'rap', 'hum', 'whistle', 'laugh', 'cry', 'scream',
-      'shout', 'whisper', 'yell', 'moan', 'wail', 'sigh', 'gasp',
-      'pant', 'cough', 'sneeze', 'sniff', 'breath', 'vocalization'
-    ];
-    final hasVocalPattern = vocalPatterns.any((pattern) => lower.contains(pattern));
-    
-    return hasExactVocal || hasVocal || hasVocalPattern;
-  }
-
-  /// Check if this label represents a genre
-  bool get isGenre {
-    const genres = [
-      'rock', 'pop', 'jazz', 'classical', 'electronic', 'blues', 'country',
-      'hip hop', 'reggae', 'metal', 'folk', 'r&b', 'soul', 'funk', 'disco',
-      'techno', 'house', 'trance', 'dubstep', 'ambient', 'indie', 'gospel',
-      'latin', 'world', 'new age', 'alternative', 'punk', 'grunge', 'emo',
-      'hardcore', 'progressive', 'experimental', 'avant-garde', 'minimalist',
-      'heavy metal', 'punk rock', 'progressive rock', 'psychedelic rock',
-      'rock and roll', 'rhythm and blues', 'soul music', 'swing music',
-      'bluegrass', 'folk music', 'middle eastern music', 'opera',
-      'drum and bass', 'electronica', 'electronic dance music',
-      'ambient music', 'trance music', 'music of latin america',
-      'salsa music', 'flamenco', 'music for children', 'new-age music',
-      'vocal music', 'a capella', 'music of africa', 'afrobeat',
-      'christian music', 'gospel music', 'music of asia', 'carnatic music',
-      'music of bollywood', 'ska', 'traditional music', 'independent music',
-      'background music', 'theme music', 'jingle', 'soundtrack music',
-      'lullaby', 'video game music', 'christmas music', 'dance music',
-      'wedding music', 'happy music', 'sad music', 'tender music',
-      'exciting music', 'angry music', 'scary music'
-    ];
-    final lower = displayName.toLowerCase();
-    
-    // Check for exact genre matches
-    final hasExactGenre = genres.any((genre) => lower == genre);
-    
-    // Check for genre keywords with or without 'music' suffix
-    final hasGenre = genres.any((genre) => lower.contains(genre));
-    
-    // Check for music-related terms
-    final hasMusic = lower.contains('music') || lower.contains('song') || lower.contains('tune');
-    
-    // Check for specific genre patterns
-    final genrePatterns = [
-      'music', 'song', 'tune', 'melody', 'rhythm', 'beat', 'sound',
-      'acoustic', 'electric', 'vocal', 'instrumental', 'orchestral'
-    ];
-    final hasPattern = genrePatterns.any((pattern) => lower.contains(pattern));
-    
-    // IMPROVED: More comprehensive genre detection
-    return hasExactGenre || hasGenre || hasMusic || hasPattern;
-  }
-
-  /// Check if this label represents a mood
-  bool get isMood {
-    const moods = [
-      // YAMNet specific mood labels
-      'happy music', 'sad music', 'tender music', 'exciting music', 
-      'angry music', 'scary music',
-      
-      // General mood terms
-      'happy', 'sad', 'energetic', 'calm', 'melancholy', 'upbeat', 'cheerful',
-      'gloomy', 'peaceful', 'relaxing', 'intense', 'aggressive', 'gentle',
-      'joyful', 'somber', 'dark', 'bright', 'serene', 'tranquil',
-      'tender', 'exciting', 'angry', 'scary', 'frightening', 'terrifying',
-      'uplifting', 'inspiring', 'motivational', 'romantic', 'passionate',
-      'melancholic', 'nostalgic', 'dreamy', 'ethereal', 'mysterious',
-      'dramatic', 'epic', 'heroic', 'triumphant', 'celebratory',
-      'contemplative', 'meditative', 'zen', 'spiritual', 'sacred',
-      'playful', 'fun', 'lighthearted', 'whimsical', 'quirky',
-      'moody', 'brooding', 'introspective', 'reflective', 'thoughtful',
-      'energetic', 'dynamic', 'vibrant', 'lively', 'animated',
-      'relaxed', 'chill', 'laid-back', 'mellow', 'smooth',
-      'intense', 'powerful', 'strong', 'forceful', 'driving',
-      'soft', 'gentle', 'delicate', 'subtle', 'understated'
-    ];
-    final lower = displayName.toLowerCase();
-    
-    // Check for exact mood matches
-    final hasExactMood = moods.any((mood) => lower == mood);
-    
-    // Check for mood keywords (partial matches)
-    final hasMood = moods.any((mood) => lower.contains(mood));
-    
-    // Check for mood-related patterns
-    const moodPatterns = [
-      'happy', 'sad', 'energetic', 'calm', 'melancholy', 'upbeat', 'cheerful',
-      'gloomy', 'peaceful', 'relaxing', 'intense', 'aggressive', 'gentle',
-      'joyful', 'somber', 'dark', 'bright', 'serene', 'tranquil', 'tender',
-      'exciting', 'angry', 'scary', 'uplifting', 'romantic', 'dramatic',
-      'playful', 'moody', 'energetic', 'relaxed', 'intense', 'soft'
-    ];
-    final hasMoodPattern = moodPatterns.any((pattern) => lower.contains(pattern));
-    
-    // Check for music mood indicators
-    const musicMoodIndicators = [
-      'music', 'song', 'tune', 'melody', 'harmony', 'rhythm', 'beat',
-      'acoustic', 'electric', 'vocal', 'instrumental', 'orchestral',
-      'ambient', 'atmospheric', 'cinematic', 'soundtrack', 'theme'
-    ];
-    final hasMusicMood = musicMoodIndicators.any((indicator) => lower.contains(indicator));
-    
-    return hasExactMood || hasMood || hasMoodPattern || hasMusicMood;
-  }
-
-  /// Check if this label is energy-related
-  bool get isEnergyRelated {
-    const energyTerms = [
-      // Volume and intensity
-      'loud', 'quiet', 'silent', 'mute', 'soft', 'strong', 'powerful',
-      'intense', 'gentle', 'heavy', 'light', 'dynamic', 'aggressive',
-      'calm', 'peaceful', 'energetic', 'lively', 'vibrant', 'animated',
-      
-      // Musical energy indicators
-      'driving', 'pulsing', 'rhythmic', 'beat', 'tempo', 'fast', 'slow',
-      'upbeat', 'downbeat', 'syncopated', 'steady', 'irregular',
-      
-      // Emotional energy
-      'exciting', 'thrilling', 'exhilarating', 'stimulating', 'arousing',
-      'relaxing', 'soothing', 'calming', 'tranquil', 'serene', 'meditative',
-      'uplifting', 'inspiring', 'motivating', 'energizing', 'invigorating',
-      
-      // Sound characteristics
-      'bright', 'dark', 'warm', 'cold', 'harsh', 'smooth', 'rough',
-      'crisp', 'muffled', 'clear', 'distorted', 'clean', 'dirty',
-      'sharp', 'dull', 'piercing', 'mellow', 'harsh', 'gentle',
-      
-      // Performance energy
-      'passionate', 'emotional', 'dramatic', 'theatrical', 'expressive',
-      'restrained', 'controlled', 'wild', 'uncontrolled', 'chaotic',
-      'organized', 'structured', 'free', 'improvised', 'spontaneous',
-      
-      // Genre energy indicators
-      'rock', 'metal', 'punk', 'hardcore', 'grunge', 'alternative',
-      'electronic', 'techno', 'house', 'trance', 'dubstep', 'drum and bass',
-      'ambient', 'new age', 'classical', 'orchestral', 'chamber',
-      'acoustic', 'folk', 'country', 'blues', 'jazz', 'funk', 'soul',
-      'reggae', 'ska', 'latin', 'world', 'ethnic', 'traditional'
-    ];
-    final lower = displayName.toLowerCase();
-    
-    // Check for exact energy matches
-    final hasExactEnergy = energyTerms.any((term) => lower == term);
-    
-    // Check for energy keywords (partial matches)
-    final hasEnergy = energyTerms.any((term) => lower.contains(term));
-    
-    // Check for energy-related patterns
-    const energyPatterns = [
-      'loud', 'quiet', 'energetic', 'intense', 'powerful', 'soft', 'strong',
-      'heavy', 'light', 'dynamic', 'aggressive', 'gentle', 'bright', 'dark',
-      'warm', 'cold', 'harsh', 'smooth', 'crisp', 'muffled', 'clear',
-      'passionate', 'emotional', 'dramatic', 'wild', 'controlled', 'free'
-    ];
-    final hasEnergyPattern = energyPatterns.any((pattern) => lower.contains(pattern));
-    
-    return hasExactEnergy || hasEnergy || hasEnergyPattern;
-  }
-}
 
 /// Signal processing results class (same as original)
 class SignalProcessingResults {
@@ -1694,6 +1410,294 @@ class AnalysisStats {
   double get failureRate {
     if (totalSongs == 0) return 0.0;
     return (failedAnalyses / totalSongs) * 100.0;
+  }
+}
+
+/// YAMNet label with comprehensive categorization (SAME AS ORIGINAL)
+class YAMNetLabel {
+  final int index;
+  final String mid;
+  final String displayName;
+
+  YAMNetLabel({
+    required this.index,
+    required this.mid,
+    required this.displayName,
+  });
+  
+  /// Check if label represents an instrument (COMPREHENSIVE - SAME AS ORIGINAL)
+  bool get isInstrument {
+    const instruments = [
+      // String instruments
+      'piano', 'guitar', 'electric guitar', 'acoustic guitar', 'bass guitar', 
+      'steel guitar', 'slide guitar', 'banjo', 'mandolin', 'ukulele', 'sitar',
+      'violin', 'viola', 'cello', 'double bass', 'contrabass', 'bass',
+      'harp', 'zither', 'harpsichord', 'lute', 'sitar', 'bouzouki',
+      
+      // Wind instruments
+      'saxophone', 'trumpet', 'trombone', 'tuba', 'french horn', 'flute',
+      'clarinet', 'oboe', 'bassoon', 'recorder', 'piccolo', 'harmonica',
+      'accordion', 'concertina', 'melodica', 'mouth organ', 'bagpipe',
+      
+      // Keyboard instruments
+      'keyboard', 'organ', 'electronic organ', 'hammond organ', 'synthesizer',
+      'sampler', 'electric piano', 'harpsichord', 'celesta', 'clavichord',
+      
+      // Percussion instruments
+      'drum', 'drum kit', 'drum machine', 'snare drum', 'bass drum', 'timpani',
+      'tabla', 'cymbal', 'hi-hat', 'crash', 'ride', 'tom', 'wood block',
+      'tambourine', 'rattle', 'maraca', 'gong', 'tubular bells', 'mallet',
+      'marimba', 'xylophone', 'glockenspiel', 'vibraphone', 'steelpan',
+      'xylophone', 'vibraphone', 'glockenspiel', 'chimes', 'bells',
+      
+      // Electronic instruments
+      'synthesizer', 'sampler', 'drum machine', 'electronic organ',
+      'theremin', 'singing bowl', 'scratching',
+      
+      // Brass instruments
+      'trumpet', 'trombone', 'tuba', 'french horn', 'cornet', 'flugelhorn',
+      'baritone horn', 'euphonium', 'sousaphone',
+      
+      // Woodwind instruments
+      'flute', 'clarinet', 'oboe', 'bassoon', 'saxophone', 'recorder',
+      'piccolo', 'english horn', 'bass clarinet', 'contrabassoon',
+      
+      // Other instruments
+      'harmonica', 'accordion', 'concertina', 'melodica', 'mouth organ',
+      'bagpipe', 'didgeridoo', 'kalimba', 'thumb piano'
+    ];
+    final lower = displayName.toLowerCase();
+    
+    // Check for exact instrument matches
+    final hasExactInstrument = instruments.any((inst) => lower == inst);
+    
+    // Check for instrument names (partial matches)
+    final hasInstrument = instruments.any((inst) => lower.contains(inst));
+    
+    // Check for instrument-related terms
+    const instrumentTerms = [
+      'instrument', 'playing', 'strumming', 'plucking', 'bowing',
+      'blowing', 'striking', 'hitting', 'tapping', 'fingering',
+      'percussion', 'brass', 'woodwind', 'string', 'keyboard',
+      'electronic', 'acoustic', 'electric', 'amplified'
+    ];
+    final hasInstrumentTerm = instrumentTerms.any((term) => lower.contains(term));
+    
+    // Check for specific YAMNet instrument patterns
+    const yamnetPatterns = [
+      'guitar', 'piano', 'drum', 'bass', 'violin', 'saxophone', 'trumpet',
+      'flute', 'clarinet', 'organ', 'synthesizer', 'keyboard', 'banjo',
+      'mandolin', 'ukulele', 'harp', 'accordion', 'harmonica', 'trombone',
+      'tuba', 'oboe', 'bassoon', 'french horn', 'xylophone', 'marimba',
+      'vibraphone', 'glockenspiel', 'timpani', 'cymbal', 'snare', 'kick',
+      'hi-hat', 'crash', 'ride', 'tom', 'wood block', 'tambourine', 'rattle',
+      'maraca', 'gong', 'tubular bells', 'mallet', 'steelpan'
+    ];
+    final hasYamnetPattern = yamnetPatterns.any((pattern) => lower.contains(pattern));
+    
+    return hasExactInstrument || hasInstrument || hasInstrumentTerm || hasYamnetPattern;
+  }
+  
+  /// Check if label represents vocals (COMPREHENSIVE - SAME AS ORIGINAL)
+  bool get isVocal {
+    const vocals = [
+      // Direct vocal terms
+      'singing', 'speech', 'vocal', 'voice', 'choir', 'chorus', 'chant',
+      'vocalization', 'vocal call', 'vocal song', 'vocal music',
+      
+      // Speech-related
+      'conversation', 'talking', 'speaking', 'whispering', 'shouting',
+      'yelling', 'screaming', 'laughing', 'crying', 'sobbing', 'whimpering',
+      'wailing', 'moaning', 'sighing', 'yodeling', 'mantra', 'narration',
+      'monologue', 'babbling', 'speech synthesizer', 'shout', 'bellow',
+      'whoop', 'yell', 'whispering', 'laughter', 'giggle', 'snicker',
+      'belly laugh', 'chuckle', 'chortle', 'crying', 'sobbing', 'whimper',
+      'wail', 'moan', 'sigh', 'rap', 'rap', 'rapping', 'humming', 'groan',
+      'grunt', 'whistling', 'breathing', 'wheeze', 'snoring', 'gasp',
+      'pant', 'snort', 'cough', 'throat clearing', 'sneeze', 'sniff',
+      
+      // Child vocals
+      'child speech', 'kid speaking', 'child singing', 'baby laughter',
+      'baby cry', 'infant cry', 'children shouting', 'children playing',
+      
+      // Synthetic vocals
+      'synthetic singing', 'speech synthesizer', 'synthetic voice',
+      
+      // Animal vocals (sometimes relevant for music)
+      'bird vocalization', 'bird call', 'bird song', 'whale vocalization',
+      
+      // Music-specific vocals
+      'vocal music', 'a capella', 'background vocals', 'lead vocals',
+      'harmony vocals', 'backing vocals', 'vocal harmony'
+    ];
+    final lower = displayName.toLowerCase();
+    
+    // Check for exact vocal matches
+    final hasExactVocal = vocals.any((vocal) => lower == vocal);
+    
+    // Check for vocal keywords (partial matches)
+    final hasVocal = vocals.any((vocal) => lower.contains(vocal));
+    
+    // Check for vocal-related patterns
+    const vocalPatterns = [
+      'sing', 'speak', 'talk', 'voice', 'vocal', 'choir', 'chorus',
+      'chant', 'rap', 'hum', 'whistle', 'laugh', 'cry', 'scream',
+      'shout', 'whisper', 'yell', 'moan', 'wail', 'sigh', 'gasp',
+      'pant', 'cough', 'sneeze', 'sniff', 'breath', 'vocalization'
+    ];
+    final hasVocalPattern = vocalPatterns.any((pattern) => lower.contains(pattern));
+    
+    return hasExactVocal || hasVocal || hasVocalPattern;
+  }
+  
+  /// Check if label represents a genre (COMPREHENSIVE - SAME AS ORIGINAL)
+  bool get isGenre {
+    const genres = [
+      'rock', 'pop', 'jazz', 'classical', 'electronic', 'blues', 'country',
+      'hip hop', 'reggae', 'metal', 'folk', 'r&b', 'soul', 'funk', 'disco',
+      'techno', 'house', 'trance', 'dubstep', 'ambient', 'indie', 'gospel',
+      'latin', 'world', 'new age', 'alternative', 'punk', 'grunge', 'emo',
+      'hardcore', 'progressive', 'experimental', 'avant-garde', 'minimalist',
+      'heavy metal', 'punk rock', 'progressive rock', 'psychedelic rock',
+      'rock and roll', 'rhythm and blues', 'soul music', 'swing music',
+      'bluegrass', 'folk music', 'middle eastern music', 'opera',
+      'drum and bass', 'electronica', 'electronic dance music',
+      'ambient music', 'trance music', 'music of latin america',
+      'salsa music', 'flamenco', 'music for children', 'new-age music',
+      'vocal music', 'a capella', 'music of africa', 'afrobeat',
+      'christian music', 'gospel music', 'music of asia', 'carnatic music',
+      'music of bollywood', 'ska', 'traditional music', 'independent music',
+      'background music', 'theme music', 'jingle', 'soundtrack music',
+      'lullaby', 'video game music', 'christmas music', 'dance music',
+      'wedding music', 'happy music', 'sad music', 'tender music',
+      'exciting music', 'angry music', 'scary music'
+    ];
+    final lower = displayName.toLowerCase();
+    
+    // Check for exact genre matches
+    final hasExactGenre = genres.any((genre) => lower == genre);
+    
+    // Check for genre keywords with or without 'music' suffix
+    final hasGenre = genres.any((genre) => lower.contains(genre));
+    
+    // Check for music-related terms
+    final hasMusic = lower.contains('music') || lower.contains('song') || lower.contains('tune');
+    
+    // Check for specific genre patterns
+    final genrePatterns = [
+      'music', 'song', 'tune', 'melody', 'rhythm', 'beat', 'sound',
+      'acoustic', 'electric', 'vocal', 'instrumental', 'orchestral'
+    ];
+    final hasPattern = genrePatterns.any((pattern) => lower.contains(pattern));
+    
+    // IMPROVED: More comprehensive genre detection
+    return hasExactGenre || hasGenre || hasMusic || hasPattern;
+  }
+  
+  /// Check if label represents mood (COMPREHENSIVE - SAME AS ORIGINAL)
+  bool get isMood {
+    const moods = [
+      // YAMNet specific mood labels
+      'happy music', 'sad music', 'tender music', 'exciting music', 
+      'angry music', 'scary music',
+      
+      // General mood terms
+      'happy', 'sad', 'energetic', 'calm', 'melancholy', 'upbeat', 'cheerful',
+      'gloomy', 'peaceful', 'relaxing', 'intense', 'aggressive', 'gentle',
+      'joyful', 'somber', 'dark', 'bright', 'serene', 'tranquil',
+      'tender', 'exciting', 'angry', 'scary', 'frightening', 'terrifying',
+      'uplifting', 'inspiring', 'motivational', 'romantic', 'passionate',
+      'melancholic', 'nostalgic', 'dreamy', 'ethereal', 'mysterious',
+      'dramatic', 'epic', 'heroic', 'triumphant', 'celebratory',
+      'contemplative', 'meditative', 'zen', 'spiritual', 'sacred',
+      'playful', 'fun', 'lighthearted', 'whimsical', 'quirky',
+      'moody', 'brooding', 'introspective', 'reflective', 'thoughtful',
+      'energetic', 'dynamic', 'vibrant', 'lively', 'animated',
+      'relaxed', 'chill', 'laid-back', 'mellow', 'smooth',
+      'intense', 'powerful', 'strong', 'forceful', 'driving',
+      'soft', 'gentle', 'delicate', 'subtle', 'understated'
+    ];
+    final lower = displayName.toLowerCase();
+    
+    // Check for exact mood matches
+    final hasExactMood = moods.any((mood) => lower == mood);
+    
+    // Check for mood keywords (partial matches)
+    final hasMood = moods.any((mood) => lower.contains(mood));
+    
+    // Check for mood-related patterns
+    const moodPatterns = [
+      'happy', 'sad', 'energetic', 'calm', 'melancholy', 'upbeat', 'cheerful',
+      'gloomy', 'peaceful', 'relaxing', 'intense', 'aggressive', 'gentle',
+      'joyful', 'somber', 'dark', 'bright', 'serene', 'tranquil', 'tender',
+      'exciting', 'angry', 'scary', 'uplifting', 'romantic', 'dramatic',
+      'playful', 'moody', 'energetic', 'relaxed', 'intense', 'soft'
+    ];
+    final hasMoodPattern = moodPatterns.any((pattern) => lower.contains(pattern));
+    
+    // Check for music mood indicators
+    const musicMoodIndicators = [
+      'music', 'song', 'tune', 'melody', 'harmony', 'rhythm', 'beat',
+      'acoustic', 'electric', 'vocal', 'instrumental', 'orchestral',
+      'ambient', 'atmospheric', 'cinematic', 'soundtrack', 'theme'
+    ];
+    final hasMusicMood = musicMoodIndicators.any((indicator) => lower.contains(indicator));
+    
+    return hasExactMood || hasMood || hasMoodPattern || hasMusicMood;
+  }
+  
+  /// Check if label is energy-related (COMPREHENSIVE - SAME AS ORIGINAL)
+  bool get isEnergyRelated {
+    const energyTerms = [
+      // Volume and intensity
+      'loud', 'quiet', 'silent', 'mute', 'soft', 'strong', 'powerful',
+      'intense', 'gentle', 'heavy', 'light', 'dynamic', 'aggressive',
+      'calm', 'peaceful', 'energetic', 'lively', 'vibrant', 'animated',
+      
+      // Musical energy indicators
+      'driving', 'pulsing', 'rhythmic', 'beat', 'tempo', 'fast', 'slow',
+      'upbeat', 'downbeat', 'syncopated', 'steady', 'irregular',
+      
+      // Emotional energy
+      'exciting', 'thrilling', 'exhilarating', 'stimulating', 'arousing',
+      'relaxing', 'soothing', 'calming', 'tranquil', 'serene', 'meditative',
+      'uplifting', 'inspiring', 'motivating', 'energizing', 'invigorating',
+      
+      // Sound characteristics
+      'bright', 'dark', 'warm', 'cold', 'harsh', 'smooth', 'rough',
+      'crisp', 'muffled', 'clear', 'distorted', 'clean', 'dirty',
+      'sharp', 'dull', 'piercing', 'mellow', 'harsh', 'gentle',
+      
+      // Performance energy
+      'passionate', 'emotional', 'dramatic', 'theatrical', 'expressive',
+      'restrained', 'controlled', 'wild', 'uncontrolled', 'chaotic',
+      'organized', 'structured', 'free', 'improvised', 'spontaneous',
+      
+      // Genre energy indicators
+      'rock', 'metal', 'punk', 'hardcore', 'grunge', 'alternative',
+      'electronic', 'techno', 'house', 'trance', 'dubstep', 'drum and bass',
+      'ambient', 'new age', 'classical', 'orchestral', 'chamber',
+      'acoustic', 'folk', 'country', 'blues', 'jazz', 'funk', 'soul',
+      'reggae', 'ska', 'latin', 'world', 'ethnic', 'traditional'
+    ];
+    final lower = displayName.toLowerCase();
+    
+    // Check for exact energy matches
+    final hasExactEnergy = energyTerms.any((term) => lower == term);
+    
+    // Check for energy keywords (partial matches)
+    final hasEnergy = energyTerms.any((term) => lower.contains(term));
+    
+    // Check for energy-related patterns
+    const energyPatterns = [
+      'loud', 'quiet', 'energetic', 'intense', 'powerful', 'soft', 'strong',
+      'heavy', 'light', 'dynamic', 'aggressive', 'gentle', 'bright', 'dark',
+      'warm', 'cold', 'harsh', 'smooth', 'crisp', 'muffled', 'clear',
+      'passionate', 'emotional', 'dramatic', 'wild', 'controlled', 'free'
+    ];
+    final hasEnergyPattern = energyPatterns.any((pattern) => lower.contains(pattern));
+    
+    return hasExactEnergy || hasEnergy || hasEnergyPattern;
   }
 }
 

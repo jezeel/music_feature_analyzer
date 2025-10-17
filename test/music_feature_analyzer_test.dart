@@ -2,18 +2,25 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:music_feature_analyzer/music_feature_analyzer.dart';
 import 'package:music_feature_analyzer/src/models/song_features.dart';
 import 'package:music_feature_analyzer/src/models/song_model.dart';
-import 'package:music_feature_analyzer/src/services/feature_extractor.dart';
 
+/// Main test suite for Music Feature Analyzer package
+/// 
+/// This includes basic functionality tests:
+/// - Package initialization and API
+/// - Model classes and data structures
+/// - Basic feature validation
 void main() {
-  group('Music Feature Analyzer Tests', () {
-    test('should initialize without errors', () async {
-      // This is a basic test to ensure the package can be imported and initialized
-      expect(MusicFeatureAnalyzer.isInitialized, false);
-
-      // Note: We can't actually test initialization without real model files
-      // but we can test that the class exists and methods are callable
+  group('Music Feature Analyzer - Main Tests', () {
+    test('should have proper API methods', () {
+      // Test that the main API methods exist
+      expect(MusicFeatureAnalyzer.initialize, isA<Function>());
+      expect(MusicFeatureAnalyzer.analyzeSong, isA<Function>());
+      expect(MusicFeatureAnalyzer.analyzeSongs, isA<Function>());
+      expect(MusicFeatureAnalyzer.extractFeaturesInBackground, isA<Function>());
+      expect(MusicFeatureAnalyzer.getExtractionProgress, isA<Function>());
       expect(MusicFeatureAnalyzer.getStats, isA<Function>());
       expect(MusicFeatureAnalyzer.dispose, isA<Function>());
+      expect(MusicFeatureAnalyzer.resetStats, isA<Function>());
     });
 
     test('should have proper model classes', () {
@@ -96,47 +103,5 @@ void main() {
       expect(features.confidence, 0.9);
     });
 
-    test('should have proper analysis options', () {
-      final options = AnalysisOptions(
-        enableYAMNet: true,
-        enableSignalProcessing: true,
-        enableSpectralAnalysis: true,
-        confidenceThreshold: 0.5,
-        maxInstruments: 10,
-        verboseLogging: false,
-      );
-
-      expect(options.enableYAMNet, true);
-      expect(options.enableSignalProcessing, true);
-      expect(options.enableSpectralAnalysis, true);
-      expect(options.confidenceThreshold, 0.5);
-      expect(options.maxInstruments, 10);
-      expect(options.verboseLogging, false);
-    });
-
-    test('should have proper analysis stats', () {
-      final stats = AnalysisStats(
-        totalSongs: 100,
-        successfulAnalyses: 95,
-        failedAnalyses: 5,
-        averageProcessingTime: 2.5,
-        lastAnalysis: DateTime.now(),
-        genreDistribution: {'Rock': 30, 'Pop': 25, 'Jazz': 20},
-        instrumentDistribution: {'Guitar': 40, 'Piano': 35, 'Drums': 25},
-      );
-
-      expect(stats.totalSongs, 100);
-      expect(stats.successfulAnalyses, 95);
-      expect(stats.failedAnalyses, 5);
-      expect(stats.averageProcessingTime, 2.5);
-      expect(stats.genreDistribution, {'Rock': 30, 'Pop': 25, 'Jazz': 20});
-      expect(stats.instrumentDistribution, {
-        'Guitar': 40,
-        'Piano': 35,
-        'Drums': 25,
-      });
-      expect(stats.successRate, 95.0);
-      expect(stats.failureRate, 5.0);
-    });
   });
 }

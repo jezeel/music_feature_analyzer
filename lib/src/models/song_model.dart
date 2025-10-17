@@ -12,7 +12,7 @@ class Song with _$Song {
     required String title,
     required String artist,
     required String album,
-    required int duration, // in seconds
+    required int duration,
     required String filePath,
     SongFeatures? features,
     String? albumArt,

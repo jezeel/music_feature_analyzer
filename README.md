@@ -237,6 +237,36 @@ class AdvancedAnalyzer {
 }
 ```
 
+### **Track Extraction Progress**
+
+```dart
+import 'package:music_feature_analyzer/music_feature_analyzer.dart';
+
+class ProgressTracker {
+  // Method 1: Track progress using file paths
+  static void trackWithFilePaths(List<String> filePaths) {
+    final progress = MusicFeatureAnalyzer.getExtractionProgress(filePaths);
+    
+    print('📊 Analysis Progress:');
+    print('  Total Songs: ${progress['totalSongs']}');
+    print('  Analyzed: ${progress['analyzedSongs']}');
+    print('  Pending: ${progress['pendingSongs']}');
+    print('  Completion: ${progress['completionPercentage'].toStringAsFixed(1)}%');
+  }
+  
+  // Method 2: Track progress using Song objects (for project integration)
+  static void trackWithSongObjects(List<dynamic> songs) {
+    final progress = MusicFeatureAnalyzer.getExtractionProgressWithSongs(songs);
+    
+    print('📊 Analysis Progress:');
+    print('  Total Songs: ${progress['totalSongs']}');
+    print('  Analyzed: ${progress['analyzedSongs']}');
+    print('  Pending: ${progress['pendingSongs']}');
+    print('  Completion: ${progress['completionPercentage'].toStringAsFixed(1)}%');
+  }
+}
+```
+
 ### **Get Analysis Statistics**
 
 ```dart
@@ -308,6 +338,8 @@ lib/
 | `analyzeSong(filePath, options?)` | Analyze a single song | `String filePath`, `AnalysisOptions? options` | `Future<SongFeatures?>` |
 | `analyzeSongs(filePaths, options?, onProgress?)` | Analyze multiple songs | `List<String> filePaths`, `AnalysisOptions? options`, `Function? onProgress` | `Future<Map<String, SongFeatures?>>` |
 | `extractFeaturesInBackground(filePaths, onProgress?, onSongUpdated?, onCompleted?, onError?)` | Background processing | `List<String> filePaths`, `Function? onProgress`, `Function? onSongUpdated`, `Function? onCompleted`, `Function? onError` | `Future<Map<String, SongFeatures?>>` |
+| `getExtractionProgress(filePaths)` | Get progress by file paths | `List<String> filePaths` | `Map<String, dynamic>` |
+| `getExtractionProgressWithSongs(songs)` | Get progress by Song objects | `List<dynamic> songs` | `Map<String, dynamic>` |
 | `getStats()` | Get analysis statistics | None | `AnalysisStats` |
 | `resetStats()` | Reset statistics | None | `void` |
 | `dispose()` | Clean up resources | None | `Future<void>` |
@@ -499,7 +531,110 @@ flutter test test/music_feature_analyzer_test.dart
 - **Batch Processing**: Multiple song analysis
 - **Background Processing**: UI-responsive analysis
 - **Advanced Configuration**: Custom analysis options
+- **Progress Tracking**: Monitor extraction progress
 - **Statistics**: Performance monitoring
+- **Project Integration**: Real-world BLoC integration
+
+### **Real-World Project Integration**
+
+Example of integrating with a Flutter music player using BLoC pattern:
+
+```dart
+// In your main.dart
+import 'package:music_feature_analyzer/music_feature_analyzer.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Music Feature Analyzer
+  final analyzerInitialized = await MusicFeatureAnalyzer.initialize();
+  if (analyzerInitialized) {
+    print('✅ Music Feature Analyzer initialized successfully');
+  }
+  
+  runApp(MyApp());
+}
+```
+
+```dart
+// In your BLoC (music_bloc.dart)
+import 'package:music_feature_analyzer/music_feature_analyzer.dart';
+
+class MusicBloc extends Bloc<MusicEvent, MusicState> {
+  Future<void> _extractFeatures() async {
+    // Ensure analyzer is initialized
+    if (!MusicFeatureAnalyzer.isInitialized) {
+      await MusicFeatureAnalyzer.initialize();
+    }
+    
+    // Get songs that need analysis
+    final pendingSongs = state.allSongs
+        .where((song) => song.features == null)
+        .toList();
+    
+    if (pendingSongs.isEmpty) return;
+    
+    // Extract features in background with progress tracking
+    final filePaths = pendingSongs.map((song) => song.path).toList();
+    final results = await MusicFeatureAnalyzer.extractFeaturesInBackground(
+      filePaths,
+      onProgress: (current, total) {
+        print('Progress: $current/$total songs processed');
+      },
+      onSongUpdated: (filePath, features) {
+        print('Updated: $filePath');
+      },
+      onCompleted: () {
+        print('✅ Feature extraction completed');
+      },
+      onError: (error) {
+        print('❌ Error: $error');
+      },
+    );
+    
+    // Update songs with extracted features
+    final updatedSongs = state.allSongs.map((song) {
+      final packageFeatures = results[song.path];
+      if (packageFeatures != null) {
+        return song.copyWith(features: convertFeatures(packageFeatures));
+      }
+      return song;
+    }).toList();
+    
+    emit(state.copyWith(allSongs: updatedSongs));
+  }
+}
+```
+
+```dart
+// In your settings screen
+import 'package:music_feature_analyzer/music_feature_analyzer.dart';
+
+class FeaturesSettingsScreen extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<MusicBloc, MusicState>(
+      builder: (context, state) {
+        // Get progress using Song objects
+        final progress = MusicFeatureAnalyzer.getExtractionProgressWithSongs(
+          state.allSongs,
+        );
+        
+        return Column(
+          children: [
+            Text('Total: ${progress['totalSongs']}'),
+            Text('Analyzed: ${progress['analyzedSongs']}'),
+            Text('Pending: ${progress['pendingSongs']}'),
+            LinearProgressIndicator(
+              value: progress['completionPercentage'] / 100,
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+```
 
 ---
 
