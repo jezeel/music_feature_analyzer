@@ -21,7 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
   double _progress = 0.0;
   String _currentSong = '';
   List<SongModel> _selectedSongs = [];
-  Map<String, SongFeaturesModel> _songFeatures = {};
+  Map<String, SongFeatures> _songFeatures = {};
   int _processedCount = 0;
   int _totalCount = 0;
 
@@ -995,7 +995,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _showDetailedResults(SongModel song, SongFeaturesModel features) {
+  void _showDetailedResults(SongModel song, SongFeatures features) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(

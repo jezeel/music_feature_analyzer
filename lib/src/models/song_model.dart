@@ -14,7 +14,7 @@ class SongModel with _$SongModel {
     required String album,
     required int duration,
     required String filePath,
-    SongFeaturesModel? features,
+    SongFeatures? features,
     String? albumArt,
     int? year,
     String? genre,

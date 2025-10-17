@@ -61,7 +61,7 @@ void main() {
       });
 
       test('SongFeatures model should work correctly', () {
-        final features = SongFeaturesModel(
+        final features = SongFeatures(
           tempo: 'Fast',
           beat: 'Strong',
           energy: 'High',

@@ -58,7 +58,7 @@ void main() {
           '/test/song3.mp3',
         ];
 
-        final updatedSongs = <String, SongFeaturesModel?>{};
+        final updatedSongs = <String, SongFeatures?>{};
         int songUpdatedCount = 0;
 
         // Simulate song processing with callbacks
@@ -658,14 +658,14 @@ void main() {
 // ============================================================================
 
 /// Create mock song features for testing
-SongFeaturesModel _createMockSongFeatures({
+SongFeatures _createMockSongFeatures({
   required String tempo,
   required String energy,
   required String genre,
   required List<String> instruments,
   required bool hasVocals,
 }) {
-  return SongFeaturesModel(
+  return SongFeatures(
     tempo: tempo,
     beat: 'Medium',
     energy: energy,

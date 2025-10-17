@@ -44,7 +44,7 @@ void main() {
 
     test('should have proper feature classes', () {
       // Test that our feature classes are properly defined
-      final features = SongFeaturesModel(
+      final features = SongFeatures(
         tempo: 'Medium',
         beat: 'Strong',
         energy: 'High',

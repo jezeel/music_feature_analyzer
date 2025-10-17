@@ -70,7 +70,7 @@ class MusicFeatureAnalyzer {
   }
 
   /// Analyze a single song
-  static Future<SongFeaturesModel?> analyzeSong(SongModel song) async {
+  static Future<SongFeatures?> analyzeSong(SongModel song) async {
     if (!_isInitialized || _extractor == null) {
       _logger.e('❌ Analyzer not initialized. Call initialize() first.');
       return null;
@@ -86,7 +86,7 @@ class MusicFeatureAnalyzer {
   }
 
   /// Analyze multiple songs
-  static Future<List<SongFeaturesModel?>> analyzeSongs(List<SongModel> songs) async {
+  static Future<List<SongFeatures?>> analyzeSongs(List<SongModel> songs) async {
     if (!_isInitialized || _extractor == null) {
       _logger.e('❌ Analyzer not initialized. Call initialize() first.');
       return [];
@@ -94,7 +94,7 @@ class MusicFeatureAnalyzer {
 
     try {
       _logger.i('🎵 Analyzing ${songs.length} songs');
-      final results = <SongFeaturesModel?>[];
+      final results = <SongFeatures?>[];
       
       for (final song in songs) {
         final features = await _extractor!.extractSongFeatures(song);
@@ -112,10 +112,10 @@ class MusicFeatureAnalyzer {
   /// 
   /// This is the main background processing method that uses isolates
   /// to prevent UI blocking during heavy feature extraction.
-  static Future<Map<String, SongFeaturesModel?>> extractFeaturesInBackground(
+  static Future<Map<String, SongFeatures?>> extractFeaturesInBackground(
     List<String> filePaths, {
     Function(int current, int total)? onProgress,
-    Function(String filePath, SongFeaturesModel? features)? onSongUpdated,
+    Function(String filePath, SongFeatures? features)? onSongUpdated,
     Function()? onCompleted,
     Function(String error)? onError,
   }) async {
@@ -739,12 +739,12 @@ class MusicFeatureAnalyzer {
   }
 
   /// Process songs with UI responsiveness using proper async scheduling (same as original)
-  static Future<Map<String, SongFeaturesModel?>> _processSongsWithUIResponsiveness(
+  static Future<Map<String, SongFeatures?>> _processSongsWithUIResponsiveness(
     List<String> filePaths,
-    Function(String filePath, SongFeaturesModel? features)? onSongUpdated,
+    Function(String filePath, SongFeatures? features)? onSongUpdated,
     Function(int current, int total)? onProgress,
   ) async {
-    final results = <String, SongFeaturesModel?>{};
+    final results = <String, SongFeatures?>{};
     
     for (int i = 0; i < filePaths.length; i++) {
       final filePath = filePaths[i];
@@ -782,7 +782,7 @@ class MusicFeatureAnalyzer {
   }
 
   /// Extract features in isolate to prevent UI blocking
-  static Future<SongFeaturesModel?> _extractFeaturesInIsolate(String filePath) async {
+  static Future<SongFeatures?> _extractFeaturesInIsolate(String filePath) async {
     try {
       // Create song model
       final song = SongModel(
@@ -807,7 +807,7 @@ class MusicFeatureAnalyzer {
   }
 
   /// Helper function for isolate processing with pre-loaded data
-  static Future<SongFeaturesModel?> _extractFeaturesInIsolateHelper(IsolateFeatureData data) async {
+  static Future<SongFeatures?> _extractFeaturesInIsolateHelper(IsolateFeatureData data) async {
     try {
       // Initialize TFLite interpreter with pre-loaded model bytes
       final interpreter = Interpreter.fromBuffer(data.yamnetModelBytes);
@@ -860,7 +860,7 @@ class MusicFeatureAnalyzer {
   }
 
   /// Extract features using pre-loaded model and labels (SAME AS ORIGINAL)
-  static Future<SongFeaturesModel?> _extractFeaturesWithPreloadedData(
+  static Future<SongFeatures?> _extractFeaturesWithPreloadedData(
     SongModel song,
     Interpreter interpreter,
     List<String> yamnetLabels,
@@ -891,7 +891,7 @@ class MusicFeatureAnalyzer {
       _logger.d('🎵 Signal features: tempo=${signalFeatures.tempoBpm}, energy=${signalFeatures.energy}, spectralCentroid=${signalFeatures.spectralCentroid}');
       
       // Create comprehensive features (SAME AS ORIGINAL)
-      final songFeatures = SongFeaturesModel(
+      final songFeatures = SongFeatures(
         tempo: _categorizeTempoInIsolate(signalFeatures.tempoBpm),
         beat: _categorizeBeatInIsolate(signalFeatures.beatStrength),
         energy: _categorizeEnergyInIsolate(signalFeatures.energy),
