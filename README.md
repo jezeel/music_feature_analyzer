@@ -319,8 +319,8 @@ lib/
 
 - **`MusicFeatureAnalyzer`**: Main API class for feature extraction
 - **`FeatureExtractor`**: Core service for YAMNet and signal processing
-- **`SongFeatures`**: Immutable data class for extracted features
-- **`Song`**: Data model for song information
+- **`SongFeaturesModel`**: Immutable data class for extracted features
+- **`SongModel`**: Data model for song information
 - **`AnalysisOptions`**: Configuration options for analysis
 - **`AnalysisStats`**: Statistics and performance metrics
 
@@ -335,9 +335,9 @@ lib/
 | Method | Description | Parameters | Returns |
 |--------|-------------|------------|---------|
 | `initialize()` | Initialize the analyzer | None | `Future<bool>` |
-| `analyzeSong(filePath, options?)` | Analyze a single song | `String filePath`, `AnalysisOptions? options` | `Future<SongFeatures?>` |
-| `analyzeSongs(filePaths, options?, onProgress?)` | Analyze multiple songs | `List<String> filePaths`, `AnalysisOptions? options`, `Function? onProgress` | `Future<Map<String, SongFeatures?>>` |
-| `extractFeaturesInBackground(filePaths, onProgress?, onSongUpdated?, onCompleted?, onError?)` | Background processing | `List<String> filePaths`, `Function? onProgress`, `Function? onSongUpdated`, `Function? onCompleted`, `Function? onError` | `Future<Map<String, SongFeatures?>>` |
+| `analyzeSong(filePath, options?)` | Analyze a single song | `String filePath`, `AnalysisOptions? options` | `Future<SongFeaturesModel?>` |
+| `analyzeSongs(filePaths, options?, onProgress?)` | Analyze multiple songs | `List<String> filePaths`, `AnalysisOptions? options`, `Function? onProgress` | `Future<Map<String, SongFeaturesModel?>>` |
+| `extractFeaturesInBackground(filePaths, onProgress?, onSongUpdated?, onCompleted?, onError?)` | Background processing | `List<String> filePaths`, `Function? onProgress`, `Function? onSongUpdated`, `Function? onCompleted`, `Function? onError` | `Future<Map<String, SongFeaturesModel?>>` |
 | `getExtractionProgress(filePaths)` | Get progress by file paths | `List<String> filePaths` | `Map<String, dynamic>` |
 | `getExtractionProgressWithSongs(songs)` | Get progress by Song objects | `List<dynamic> songs` | `Map<String, dynamic>` |
 | `getStats()` | Get analysis statistics | None | `AnalysisStats` |
@@ -350,12 +350,12 @@ lib/
 |----------|------|-------------|
 | `isInitialized` | `bool` | Check if analyzer is initialized |
 
-### **SongFeatures**
+### **SongFeaturesModel**
 
 The main result object containing all extracted features:
 
 ```dart
-class SongFeatures {
+class SongFeaturesModel {
   // Basic categorical features
   final String tempo;                    // e.g. "Fast", "Medium", "Slow"
   final String beat;                     // e.g. "Strong", "Soft", "No Beat"

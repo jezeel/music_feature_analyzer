@@ -20,8 +20,8 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isAnalyzing = false;
   double _progress = 0.0;
   String _currentSong = '';
-  List<Song> _selectedSongs = [];
-  Map<String, SongFeatures> _songFeatures = {};
+  List<SongModel> _selectedSongs = [];
+  Map<String, SongFeaturesModel> _songFeatures = {};
   int _processedCount = 0;
   int _totalCount = 0;
 
@@ -752,7 +752,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       
       if (result != null) {
-        final newSongs = result.files.take(4 - _selectedSongs.length).map((file) => Song(
+        final newSongs = result.files.take(4 - _selectedSongs.length).map((file) => SongModel(
           id: file.path!.hashCode.toString(),
           title: file.name,
           artist: 'Unknown',
@@ -784,7 +784,7 @@ class _HomeScreenState extends State<HomeScreen> {
             .take(4 - _selectedSongs.length)
             .toList();
         
-        final newSongs = audioFiles.map((file) => Song(
+        final newSongs = audioFiles.map((file) => SongModel(
           id: file.path.hashCode.toString(),
           title: file.path.split('/').last,
           artist: 'Unknown',
@@ -995,7 +995,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _showDetailedResults(Song song, SongFeatures features) {
+  void _showDetailedResults(SongModel song, SongFeaturesModel features) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(

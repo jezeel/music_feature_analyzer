@@ -25,7 +25,7 @@ void main() {
 
     test('should have proper model classes', () {
       // Test that our model classes are properly defined
-      final song = Song(
+      final song = SongModel(
         id: 'test',
         title: 'Test Song',
         artist: 'Test Artist',
@@ -44,7 +44,7 @@ void main() {
 
     test('should have proper feature classes', () {
       // Test that our feature classes are properly defined
-      final features = SongFeatures(
+      final features = SongFeaturesModel(
         tempo: 'Medium',
         beat: 'Strong',
         energy: 'High',

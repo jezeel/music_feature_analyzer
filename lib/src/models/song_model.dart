@@ -6,20 +6,20 @@ part 'song_model.g.dart';
 
 /// Song model for the music feature analyzer package
 @freezed
-class Song with _$Song {
-  const factory Song({
+class SongModel with _$SongModel {
+  const factory SongModel({
     required String id,
     required String title,
     required String artist,
     required String album,
     required int duration,
     required String filePath,
-    SongFeatures? features,
+    SongFeaturesModel? features,
     String? albumArt,
     int? year,
     String? genre,
     int? trackNumber,
-  }) = _Song;
+  }) = _SongModel;
 
-  factory Song.fromJson(Map<String, dynamic> json) => _$SongFromJson(json);
+  factory SongModel.fromJson(Map<String, dynamic> json) => _$SongModelFromJson(json);
 }

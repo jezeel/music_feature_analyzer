@@ -42,7 +42,7 @@ void main() {
     
     group('Model Classes', () {
       test('Song model should work correctly', () {
-        final song = Song(
+        final song = SongModel(
           id: 'test_song_123',
           title: 'Test Song Title',
           artist: 'Test Artist',
@@ -61,7 +61,7 @@ void main() {
       });
 
       test('SongFeatures model should work correctly', () {
-        final features = SongFeatures(
+        final features = SongFeaturesModel(
           tempo: 'Fast',
           beat: 'Strong',
           energy: 'High',
@@ -346,7 +346,7 @@ void main() {
         // Test error handling for uninitialized analyzer
         try {
           // This should not throw but return null/empty results
-          final song = Song(
+          final song = SongModel(
             id: 'test',
             title: 'Test Song',
             artist: 'Test Artist',
@@ -387,7 +387,7 @@ void main() {
     group('Integration Tests', () {
       test('should work with multiple songs', () async {
         final songs = [
-          Song(
+          SongModel(
             id: 'song1',
             title: 'Song 1',
             artist: 'Artist 1',
@@ -395,7 +395,7 @@ void main() {
             duration: 180,
             filePath: '/test/song1.mp3',
           ),
-          Song(
+          SongModel(
             id: 'song2',
             title: 'Song 2',
             artist: 'Artist 2',
@@ -403,7 +403,7 @@ void main() {
             duration: 240,
             filePath: '/test/song2.mp3',
           ),
-          Song(
+          SongModel(
             id: 'song3',
             title: 'Song 3',
             artist: 'Artist 3',

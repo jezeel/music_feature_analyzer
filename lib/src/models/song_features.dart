@@ -5,8 +5,8 @@ part 'song_features.g.dart';
 
 /// Comprehensive song features extracted by the analyzer
 @freezed
-class SongFeatures with _$SongFeatures {
-  const factory SongFeatures({
+class SongFeaturesModel with _$SongFeaturesModel {
+  const factory SongFeaturesModel({
     // Basic categorical features
     required String tempo, // e.g. "Fast", "Medium", "Slow"
     required String beat, // e.g. "Strong", "Soft", "No Beat"
@@ -44,8 +44,8 @@ class SongFeatures with _$SongFeatures {
     // Analysis metadata
     required DateTime analyzedAt, // When analysis was performed
     required String analyzerVersion, // Analyzer version used
-  }) = _SongFeatures;
+  }) = _SongFeaturesModel;
 
-  factory SongFeatures.fromJson(Map<String, dynamic> json) => _$SongFeaturesFromJson(json);
+  factory SongFeaturesModel.fromJson(Map<String, dynamic> json) => _$SongFeaturesModelFromJson(json);
 }
 

@@ -70,7 +70,7 @@ class MusicFeatureAnalyzer {
   }
 
   /// Analyze a single song
-  static Future<SongFeatures?> analyzeSong(Song song) async {
+  static Future<SongFeaturesModel?> analyzeSong(SongModel song) async {
     if (!_isInitialized || _extractor == null) {
       _logger.e('❌ Analyzer not initialized. Call initialize() first.');
       return null;
@@ -86,7 +86,7 @@ class MusicFeatureAnalyzer {
   }
 
   /// Analyze multiple songs
-  static Future<List<SongFeatures?>> analyzeSongs(List<Song> songs) async {
+  static Future<List<SongFeaturesModel?>> analyzeSongs(List<SongModel> songs) async {
     if (!_isInitialized || _extractor == null) {
       _logger.e('❌ Analyzer not initialized. Call initialize() first.');
       return [];
@@ -94,7 +94,7 @@ class MusicFeatureAnalyzer {
 
     try {
       _logger.i('🎵 Analyzing ${songs.length} songs');
-      final results = <SongFeatures?>[];
+      final results = <SongFeaturesModel?>[];
       
       for (final song in songs) {
         final features = await _extractor!.extractSongFeatures(song);
@@ -112,10 +112,10 @@ class MusicFeatureAnalyzer {
   /// 
   /// This is the main background processing method that uses isolates
   /// to prevent UI blocking during heavy feature extraction.
-  static Future<Map<String, SongFeatures?>> extractFeaturesInBackground(
+  static Future<Map<String, SongFeaturesModel?>> extractFeaturesInBackground(
     List<String> filePaths, {
     Function(int current, int total)? onProgress,
-    Function(String filePath, SongFeatures? features)? onSongUpdated,
+    Function(String filePath, SongFeaturesModel? features)? onSongUpdated,
     Function()? onCompleted,
     Function(String error)? onError,
   }) async {
@@ -739,12 +739,12 @@ class MusicFeatureAnalyzer {
   }
 
   /// Process songs with UI responsiveness using proper async scheduling (same as original)
-  static Future<Map<String, SongFeatures?>> _processSongsWithUIResponsiveness(
+  static Future<Map<String, SongFeaturesModel?>> _processSongsWithUIResponsiveness(
     List<String> filePaths,
-    Function(String filePath, SongFeatures? features)? onSongUpdated,
+    Function(String filePath, SongFeaturesModel? features)? onSongUpdated,
     Function(int current, int total)? onProgress,
   ) async {
-    final results = <String, SongFeatures?>{};
+    final results = <String, SongFeaturesModel?>{};
     
     for (int i = 0; i < filePaths.length; i++) {
       final filePath = filePaths[i];
@@ -782,10 +782,10 @@ class MusicFeatureAnalyzer {
   }
 
   /// Extract features in isolate to prevent UI blocking
-  static Future<SongFeatures?> _extractFeaturesInIsolate(String filePath) async {
+  static Future<SongFeaturesModel?> _extractFeaturesInIsolate(String filePath) async {
     try {
       // Create song model
-      final song = Song(
+      final song = SongModel(
         id: filePath.hashCode.toString(),
         title: _getFileName(filePath),
         artist: 'Unknown',
@@ -807,7 +807,7 @@ class MusicFeatureAnalyzer {
   }
 
   /// Helper function for isolate processing with pre-loaded data
-  static Future<SongFeatures?> _extractFeaturesInIsolateHelper(IsolateFeatureData data) async {
+  static Future<SongFeaturesModel?> _extractFeaturesInIsolateHelper(IsolateFeatureData data) async {
     try {
       // Initialize TFLite interpreter with pre-loaded model bytes
       final interpreter = Interpreter.fromBuffer(data.yamnetModelBytes);
@@ -831,7 +831,7 @@ class MusicFeatureAnalyzer {
   }
 
   /// Prepare data for isolate processing (same as original)
-  static Future<IsolateFeatureData> _prepareIsolateData(Song song) async {
+  static Future<IsolateFeatureData> _prepareIsolateData(SongModel song) async {
     try {
       _logger.d('📦 Preparing isolate data for: ${song.title}');
 
@@ -860,8 +860,8 @@ class MusicFeatureAnalyzer {
   }
 
   /// Extract features using pre-loaded model and labels (SAME AS ORIGINAL)
-  static Future<SongFeatures?> _extractFeaturesWithPreloadedData(
-    Song song,
+  static Future<SongFeaturesModel?> _extractFeaturesWithPreloadedData(
+    SongModel song,
     Interpreter interpreter,
     List<String> yamnetLabels,
     String modelVersion,
@@ -891,7 +891,7 @@ class MusicFeatureAnalyzer {
       _logger.d('🎵 Signal features: tempo=${signalFeatures.tempoBpm}, energy=${signalFeatures.energy}, spectralCentroid=${signalFeatures.spectralCentroid}');
       
       // Create comprehensive features (SAME AS ORIGINAL)
-      final songFeatures = SongFeatures(
+      final songFeatures = SongFeaturesModel(
         tempo: _categorizeTempoInIsolate(signalFeatures.tempoBpm),
         beat: _categorizeBeatInIsolate(signalFeatures.beatStrength),
         energy: _categorizeEnergyInIsolate(signalFeatures.energy),
@@ -1031,7 +1031,7 @@ class MusicFeatureAnalyzer {
 /// Data model for passing feature extraction data to isolates
 /// This allows us to pre-load assets in the main thread and pass them to isolates
 class IsolateFeatureData {
-  final Song song;
+  final SongModel song;
   final Uint8List yamnetModelBytes;
   final List<String> yamnetLabels;
   final String modelVersion;

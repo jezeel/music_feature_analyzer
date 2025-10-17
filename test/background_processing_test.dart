@@ -58,7 +58,7 @@ void main() {
           '/test/song3.mp3',
         ];
 
-        final updatedSongs = <String, SongFeatures?>{};
+        final updatedSongs = <String, SongFeaturesModel?>{};
         int songUpdatedCount = 0;
 
         // Simulate song processing with callbacks
@@ -122,7 +122,7 @@ void main() {
     
     group('Isolate Processing', () {
       test('should prepare isolate data correctly', () {
-        final song = Song(
+        final song = SongModel(
           id: 'test_song_123',
           title: 'Test Song',
           artist: 'Test Artist',
@@ -658,14 +658,14 @@ void main() {
 // ============================================================================
 
 /// Create mock song features for testing
-SongFeatures _createMockSongFeatures({
+SongFeaturesModel _createMockSongFeatures({
   required String tempo,
   required String energy,
   required String genre,
   required List<String> instruments,
   required bool hasVocals,
 }) {
-  return SongFeatures(
+  return SongFeaturesModel(
     tempo: tempo,
     beat: 'Medium',
     energy: energy,

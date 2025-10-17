@@ -70,7 +70,7 @@ class FeatureExtractor {
   }
 
   /// Extract features for a single song
-  Future<SongFeatures?> extractSongFeatures(Song song) async {
+  Future<SongFeaturesModel?> extractSongFeatures(SongModel song) async {
     if (!_isInitialized) {
       _logger.e('❌ Feature Extractor not initialized');
       return null;
@@ -990,12 +990,12 @@ class FeatureExtractor {
   }
 
   /// Combine YAMNet and signal processing results
-  SongFeatures _combineResults(
+  SongFeaturesModel _combineResults(
     YAMNetResults yamnetResults,
     SignalProcessingResults signalResults,
-    Song song,
+    SongModel song,
   ) {
-    return SongFeatures(
+    return SongFeaturesModel(
       // Basic categorical features
       tempo: _categorizeTempo(signalResults.tempoBpm),
       beat: _categorizeBeat(signalResults.beatStrength),
@@ -1105,7 +1105,7 @@ class FeatureExtractor {
   }
 
   /// Update statistics
-  void _updateStatistics(SongFeatures features) {
+  void _updateStatistics(SongFeaturesModel features) {
     // Update genre counts
     _genreCounts[features.estimatedGenre] = 
         (_genreCounts[features.estimatedGenre] ?? 0) + 1;
@@ -1132,8 +1132,8 @@ class FeatureExtractor {
 
 
   /// Extract features from multiple songs (batch processing)
-  Future<List<SongFeatures>> extractMultipleSongs(List<Song> songs) async {
-    final results = <SongFeatures>[];
+  Future<List<SongFeaturesModel>> extractMultipleSongs(List<SongModel> songs) async {
+    final results = <SongFeaturesModel>[];
     
     for (final song in songs) {
       try {
