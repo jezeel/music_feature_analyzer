@@ -49,10 +49,10 @@ coverage/
 # Test related
 test_driver/
 
-# Generated files
-*.freezed.dart
-*.g.dart
-*.gr.dart
+# Generated files (commented out for package distribution)
+# *.freezed.dart
+# *.g.dart
+# *.gr.dart
 
 # Build artifacts
 build/
@@ -173,10 +173,10 @@ coverage/
 # Test related
 test_driver/
 
-# Generated files
-*.freezed.dart
-*.g.dart
-*.gr.dart
+# Generated files (commented out for package distribution)
+# *.freezed.dart
+# *.g.dart
+# *.gr.dart
 
 # Build artifacts
 build/
