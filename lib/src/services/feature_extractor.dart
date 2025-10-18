@@ -120,8 +120,8 @@ class FeatureExtractor {
     try {
       _logger.i('📱 Loading YAMNet model...');
       
-      // Load model directly from assets (same approach as original)
-      _yamnetModel = await Interpreter.fromAsset('assets/models/1.tflite');
+      // Load model from package assets
+      _yamnetModel = await Interpreter.fromAsset('packages/music_feature_analyzer/assets/models/1.tflite');
       
       // Cache model bytes for isolates
       _cachedModelBytes = await _getModelBytes();
@@ -135,7 +135,7 @@ class FeatureExtractor {
 
   /// Get model bytes from asset
   Future<Uint8List> _getModelBytes() async {
-    final byteData = await rootBundle.load('assets/models/1.tflite');
+    final byteData = await rootBundle.load('packages/music_feature_analyzer/assets/models/1.tflite');
     return byteData.buffer.asUint8List();
   }
 
@@ -144,7 +144,7 @@ class FeatureExtractor {
     try {
       _logger.i('📋 Loading YAMNet labels...');
       
-      final labelsData = await rootBundle.loadString('assets/models/yamnet_class_map.csv');
+      final labelsData = await rootBundle.loadString('packages/music_feature_analyzer/assets/models/yamnet_class_map.csv');
       _yamnetLabels = _parseYAMNetLabels(labelsData);
       
       _logger.i('✅ YAMNet labels loaded: ${_yamnetLabels.length} labels');

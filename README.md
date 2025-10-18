@@ -44,6 +44,8 @@ dependencies:
   music_feature_analyzer: ^1.0.0
 ```
 
+> **📦 Model Files Included**: The package includes all necessary AI model files (`1.tflite` and `yamnet_class_map.csv`) automatically. You don't need to add any model files to your project assets.
+
 ### **Basic Usage**
 
 ```dart
@@ -436,6 +438,15 @@ class AnalysisOptions {
 - **Dart**: 3.8.1 or higher
 - **iOS**: 11.0 or higher
 - **Android**: API 21 or higher
+
+### **🤖 AI Model Files**
+
+The package includes all necessary AI model files automatically:
+
+- **`1.tflite`** (15MB) - YAMNet TensorFlow Lite model for audio classification
+- **`yamnet_class_map.csv`** - Class labels for 521 audio categories
+
+> **✅ No Setup Required**: These files are bundled with the package and loaded automatically. You don't need to add any model files to your project.
 
 ---
 

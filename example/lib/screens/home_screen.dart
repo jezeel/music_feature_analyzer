@@ -17,13 +17,12 @@ class _HomeScreenState extends State<HomeScreen> {
   static final AppLogger _logger = AppLogger('HomeScreen');
   
   bool _isInitialized = false;
-  bool _isAnalyzing = false;
-  double _progress = 0.0;
-  String _currentSong = '';
+  bool _isProcessingInBackground = false;
   List<SongModel> _selectedSongs = [];
   Map<String, ExtractedSongFeatures> _songFeatures = {};
-  int _processedCount = 0;
-  int _totalCount = 0;
+  
+  // Constants
+  static const int _maxSongs = 100;
 
   @override
   void initState() {
@@ -36,6 +35,33 @@ class _HomeScreenState extends State<HomeScreen> {
       _isInitialized = MusicFeatureAnalyzer.isInitialized;
     });
     _logger.i('System status - Initialized: $_isInitialized');
+    
+    // If not initialized, try to initialize
+    if (!_isInitialized) {
+      _initializeAnalyzer();
+    }
+  }
+
+  Future<void> _initializeAnalyzer() async {
+    try {
+      _logger.i('Initializing Music Feature Analyzer...');
+      final success = await MusicFeatureAnalyzer.initialize();
+      
+      setState(() {
+        _isInitialized = success;
+      });
+      
+      if (success) {
+        _logger.i('✅ Music Feature Analyzer initialized successfully');
+        _showSnackBar('✅ System ready for analysis!', Colors.green);
+      } else {
+        _logger.e('❌ Music Feature Analyzer initialization failed');
+        _showSnackBar('❌ Initialization failed - will retry later', Colors.orange);
+      }
+    } catch (e) {
+      _logger.e('Initialization error: $e');
+      _showSnackBar('❌ Initialization error: $e', Colors.red);
+    }
   }
 
   @override
@@ -49,50 +75,39 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
+        actions: [
+          if (_selectedSongs.isNotEmpty)
+            IconButton(
+              onPressed: _extractAllFeatures,
+              icon: const Icon(Icons.psychology_rounded),
+              tooltip: 'AI Analyze All Songs',
+            ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.all(20.w),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header Section
-            _buildHeader(),
+            // Welcome Card
+            _buildWelcomeCard(),
             SizedBox(height: 30.h),
             
-            // Status Card
-            _buildStatusCard(),
+            // Upload Section
+            _buildUploadSection(),
             SizedBox(height: 30.h),
             
-            // What This Package Does
-            _buildPackageInfo(),
-            SizedBox(height: 30.h),
-            
-            // Add Music Section
-            _buildAddMusicSection(),
-            SizedBox(height: 30.h),
-            
-            // Selected Songs
-            if (_selectedSongs.isNotEmpty) _buildSelectedSongs(),
-            
-            // Analysis Section
-            if (_selectedSongs.isNotEmpty) _buildAnalysisSection(),
-            
-            // Progress Section
-            if (_isAnalyzing) _buildProgressSection(),
-            
-            // Results Section
-            if (_songFeatures.isNotEmpty) _buildResultsSection(),
+            // Songs List
+            if (_selectedSongs.isNotEmpty) _buildSongsList(),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildHeader() {
-    return Column(
-      children: [
-        Container(
-          padding: EdgeInsets.all(20.w),
+  Widget _buildWelcomeCard() {
+    return Container(
+      padding: EdgeInsets.all(20.w),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
@@ -130,166 +145,58 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 textAlign: TextAlign.center,
               ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatusCard() {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-      child: Padding(
-        padding: EdgeInsets.all(20.w),
-        child: Row(
-          children: [
-            Container(
-              padding: EdgeInsets.all(12.w),
-              decoration: BoxDecoration(
-                color: _isInitialized ? Colors.green.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12.r),
-              ),
-              child: Icon(
-                _isInitialized ? Icons.check_circle_rounded : Icons.schedule_rounded,
-                color: _isInitialized ? Colors.green : Colors.orange,
-                size: 28.sp,
-              ),
-            ),
-            SizedBox(width: 16.w),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'System Status',
-                    style: GoogleFonts.poppins(
-                      fontSize: 18.sp,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  SizedBox(height: 4.h),
-                  Text(
-                    _isInitialized ? 'Ready for Analysis' : 'Not Initialized',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14.sp,
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (!_isInitialized)
-              ElevatedButton(
-                onPressed: _initializeAnalyzer,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.r),
-                  ),
-                ),
-                child: const Text('Initialize'),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPackageInfo() {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-      child: Padding(
-        padding: EdgeInsets.all(20.w),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+          SizedBox(height: 16.h),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  Icons.info_rounded,
-                  color: Theme.of(context).colorScheme.primary,
-                  size: 24.sp,
-                ),
-                SizedBox(width: 12.w),
-                Text(
-                  'What This Package Does',
-                  style: GoogleFonts.poppins(
-                    fontSize: 18.sp,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 16.h),
-            _buildFeatureItem('🎵 Genre Detection', 'Automatically identify music genre'),
-            _buildFeatureItem('🎼 Tempo Analysis', 'Detect BPM and rhythm patterns'),
-            _buildFeatureItem('🎤 Vocal Detection', 'Identify if song has vocals'),
-            _buildFeatureItem('🎹 Instrument Recognition', 'Detect musical instruments'),
-            _buildFeatureItem('😊 Mood Analysis', 'Analyze emotional content'),
-            _buildFeatureItem('⚡ Energy Levels', 'Measure song intensity'),
-            _buildFeatureItem('📊 Spectral Features', 'Advanced audio analysis'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFeatureItem(String title, String description) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 6.h),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+                _isProcessingInBackground 
+                  ? Icons.sync_rounded 
+                  : _isInitialized 
+                    ? Icons.check_circle_rounded 
+                    : Icons.schedule_rounded,
+                color: Colors.white,
+                size: 20.sp,
+              ),
           SizedBox(width: 8.w),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14.sp,
-                    fontWeight: FontWeight.w500,
-                  ),
+               Text(
+                 _isProcessingInBackground 
+                   ? 'Processing in Background...' 
+                   : _isInitialized 
+                     ? 'System Ready' 
+                     : 'Model Loading...',
+                style: GoogleFonts.poppins(
+                  fontSize: 14.sp,
+                  color: Colors.white.withValues(alpha: 0.9),
+                  fontWeight: FontWeight.w500,
                 ),
-                Text(
-                  description,
-                  style: GoogleFonts.poppins(
-                    fontSize: 12.sp,
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                  ),
                 ),
-              ],
-            ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildAddMusicSection() {
+  Widget _buildUploadSection() {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
       child: Padding(
-        padding: EdgeInsets.all(20.w),
+        padding: EdgeInsets.all(16.w),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Add Music Files',
+              'Upload Music Files',
               style: GoogleFonts.poppins(
                 fontSize: 18.sp,
                 fontWeight: FontWeight.w600,
               ),
             ),
-            SizedBox(height: 12.h),
+            SizedBox(height: 8.h),
             Text(
-              'Select audio files to analyze (Maximum 4 songs)',
+              'Select audio files or folder to analyze',
               style: GoogleFonts.poppins(
                 fontSize: 14.sp,
                 color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
@@ -300,7 +207,7 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _selectedSongs.length < 4 ? _selectMusicFiles : null,
+                    onPressed: _selectedSongs.length < _maxSongs ? _selectMusicFiles : null,
                     icon: const Icon(Icons.music_note_rounded),
                     label: const Text('Select Files'),
                     style: ElevatedButton.styleFrom(
@@ -316,7 +223,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 SizedBox(width: 12.w),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: _selectedSongs.length < 4 ? _selectMusicFolder : null,
+                    onPressed: _selectedSongs.length < _maxSongs ? _selectMusicFolder : null,
                     icon: const Icon(Icons.folder_rounded),
                     label: const Text('Select Folder'),
                     style: OutlinedButton.styleFrom(
@@ -329,7 +236,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ),
-            if (_selectedSongs.length >= 4) ...[
+            if (_selectedSongs.length >= _maxSongs) ...[
               SizedBox(height: 12.h),
               Container(
                 padding: EdgeInsets.all(12.w),
@@ -343,7 +250,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     Icon(Icons.info_rounded, color: Colors.orange, size: 16.sp),
                     SizedBox(width: 8.w),
                     Text(
-                      'Maximum 4 songs reached',
+                      'Maximum $_maxSongs songs reached',
                       style: GoogleFonts.poppins(
                         fontSize: 12.sp,
                         color: Colors.orange,
@@ -359,72 +266,196 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildSelectedSongs() {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-      child: Padding(
-        padding: EdgeInsets.all(20.w),
-        child: Column(
+  Widget _buildSongsList() {
+    return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Text(
-                  'Selected Songs (${_selectedSongs.length}/4)',
+              'Songs (${_selectedSongs.length})',
                   style: GoogleFonts.poppins(
-                    fontSize: 18.sp,
+                fontSize: 20.sp,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const Spacer(),
-                TextButton.icon(
-                  onPressed: _clearAllSongs,
-                  icon: const Icon(Icons.clear_all_rounded, size: 16),
-                  label: const Text('Clear All'),
+            if (_selectedSongs.isNotEmpty)
+              IconButton(
+                onPressed: _isProcessingInBackground ? null : _extractAllFeatures,
+                icon: _isProcessingInBackground 
+                  ? const Icon(Icons.sync_rounded)
+                  : const Icon(Icons.psychology_rounded),
+                tooltip: _isProcessingInBackground 
+                  ? 'Processing in background...' 
+                  : 'AI Analyze All Songs',
+                style: IconButton.styleFrom(
+                  backgroundColor: _isProcessingInBackground
+                    ? Colors.grey
+                    : Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                ),
                 ),
               ],
             ),
             SizedBox(height: 16.h),
-            ...List.generate(_selectedSongs.length, (index) {
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _selectedSongs.length,
+          separatorBuilder: (context, index) => SizedBox(height: 12.h),
+          itemBuilder: (context, index) {
               final song = _selectedSongs[index];
               final features = _songFeatures[song.id];
-              return Container(
-                margin: EdgeInsets.only(bottom: 8.h),
-                padding: EdgeInsets.all(12.w),
+            return _buildSongTile(song, features);
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSongTile(SongModel song, ExtractedSongFeatures? features) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(10.r),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Song Info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  song.title,
+                  style: GoogleFonts.poppins(
+                    fontSize: 15.sp,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                SizedBox(height: 2.h),
+                Text(
+                  song.artist,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13.sp,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                SizedBox(height: 2.h),
+                Text(
+                  _formatDuration(song.duration),
+                  style: GoogleFonts.poppins(
+                    fontSize: 11.sp,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Action Buttons
+            Row(
+              children: [
+                   // AI Button
+                   IconButton(
+                     onPressed: _isProcessingInBackground ? null : () => _extractSingleSongFeatures(song),
+                     icon: _isProcessingInBackground 
+                       ? const Icon(Icons.sync_rounded)
+                       : const Icon(Icons.psychology_rounded),
+                     tooltip: _isProcessingInBackground 
+                       ? 'Processing in background...' 
+                       : 'AI Analyze This Song',
+                     style: IconButton.styleFrom(
+                       backgroundColor: _isProcessingInBackground
+                         ? Colors.grey.withValues(alpha: 0.1)
+                         : features != null 
+                           ? Colors.green.withValues(alpha: 0.1)
+                           : Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                       foregroundColor: _isProcessingInBackground
+                         ? Colors.grey
+                         : features != null 
+                           ? Colors.green
+                           : Theme.of(context).colorScheme.primary,
+                     ),
+                   ),
+              SizedBox(width: 8.w),
+              // Features Button
+              IconButton(
+                onPressed: features != null ? () => _showFeaturePopup(song, features) : null,
+                icon: const Icon(Icons.arrow_forward_ios_rounded),
+                tooltip: 'View Features',
+                style: IconButton.styleFrom(
+                  backgroundColor: features != null 
+                    ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+                    : Colors.grey.withValues(alpha: 0.1),
+                  foregroundColor: features != null 
+                    ? Theme.of(context).colorScheme.primary
+                    : Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _showFeaturePopup(SongModel song, ExtractedSongFeatures features) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20.r)),
+        child: Container(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.8),
+        child: Column(
+            mainAxisSize: MainAxisSize.min,
+          children: [
+              // Header
+              Container(
+                padding: EdgeInsets.all(20.w),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(12.r),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                  color: Theme.of(context).colorScheme.primary,
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(20.r),
+                    topRight: Radius.circular(20.r),
                   ),
                 ),
                 child: Row(
-                  children: [
-                    Icon(
-                      Icons.music_note_rounded,
-                      color: Theme.of(context).colorScheme.primary,
-                      size: 20.sp,
-                    ),
-                    SizedBox(width: 12.w),
+              children: [
+                Icon(
+                  Icons.analytics_rounded,
+                      color: Colors.white,
+                  size: 24.sp,
+                ),
+                SizedBox(width: 12.w),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
+                Text(
                             song.title,
-                            style: GoogleFonts.poppins(
-                              fontSize: 14.sp,
-                              fontWeight: FontWeight.w500,
+                  style: GoogleFonts.poppins(
+                    fontSize: 18.sp,
+                    fontWeight: FontWeight.w600,
+                              color: Colors.white,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          Text(
+                Text(
                             song.artist,
-                            style: GoogleFonts.poppins(
-                              fontSize: 12.sp,
-                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                  style: GoogleFonts.poppins(
+                    fontSize: 14.sp,
+                              color: Colors.white.withValues(alpha: 0.9),
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -432,314 +463,229 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                     ),
-                    if (features != null)
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8.r),
-                          border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
-                        ),
-                        child: Text(
-                          'Analyzed',
-                          style: GoogleFonts.poppins(
-                            fontSize: 10.sp,
-                            color: Colors.green,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      )
-                    else
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8.r),
-                          border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
-                        ),
-                        child: Text(
-                          'Pending',
-                          style: GoogleFonts.poppins(
-                            fontSize: 10.sp,
-                            color: Colors.grey,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close_rounded, color: Colors.white),
+                    ),
                   ],
                 ),
-              );
-            }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAnalysisSection() {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-      child: Padding(
-        padding: EdgeInsets.all(20.w),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Analysis Options',
-              style: GoogleFonts.poppins(
-                fontSize: 18.sp,
-                fontWeight: FontWeight.w600,
               ),
-            ),
-            SizedBox(height: 16.h),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _isInitialized && !_isAnalyzing ? _extractAllFeatures : null,
-                    icon: const Icon(Icons.analytics_rounded),
-                    label: const Text('Analyze All'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(vertical: 16.h),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12.r),
-                      ),
-                    ),
-                  ),
+              // Features Grid
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.all(20.w),
+                  child: _buildFeaturesGrid(features),
                 ),
-                SizedBox(width: 12.w),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _isInitialized && !_isAnalyzing ? _extractPendingFeatures : null,
-                    icon: const Icon(Icons.pending_actions_rounded),
-                    label: const Text('Analyze Pending'),
-                    style: OutlinedButton.styleFrom(
-                      padding: EdgeInsets.symmetric(vertical: 16.h),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12.r),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 12.h),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _songFeatures.isNotEmpty ? _clearAllFeatures : null,
-                icon: const Icon(Icons.clear_all_rounded),
-                label: const Text('Clear All Features'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.red,
-                  padding: EdgeInsets.symmetric(vertical: 16.h),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.r),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProgressSection() {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-      child: Padding(
-        padding: EdgeInsets.all(20.w),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.analytics_rounded,
-                  color: Theme.of(context).colorScheme.primary,
-                  size: 24.sp,
-                ),
-                SizedBox(width: 12.w),
-                Text(
-                  'Analysis in Progress',
-                  style: GoogleFonts.poppins(
-                    fontSize: 18.sp,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const Spacer(),
-                IconButton(
-                  onPressed: _cancelAnalysis,
-                  icon: const Icon(Icons.cancel_rounded),
-                  tooltip: 'Cancel Analysis',
-                ),
-              ],
-            ),
-            SizedBox(height: 20.h),
-            LinearProgressIndicator(
-              value: _progress,
-              backgroundColor: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-              valueColor: AlwaysStoppedAnimation<Color>(
-                Theme.of(context).colorScheme.primary,
-              ),
-              minHeight: 8.h,
-            ),
-            SizedBox(height: 16.h),
-            Row(
-              children: [
-                Text(
-                  'Progress: $_processedCount/$_totalCount songs',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14.sp,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  '${(_progress * 100).toStringAsFixed(0)}%',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14.sp,
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-            if (_currentSong.isNotEmpty) ...[
-              SizedBox(height: 12.h),
-              Text(
-                'Processing: $_currentSong',
-                style: GoogleFonts.poppins(
-                  fontSize: 12.sp,
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
             ],
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildResultsSection() {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-      child: Padding(
-        padding: EdgeInsets.all(20.w),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Analysis Results',
-              style: GoogleFonts.poppins(
-                fontSize: 18.sp,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            SizedBox(height: 16.h),
-            ..._songFeatures.entries.map((entry) {
-              final songId = entry.key;
-              final features = entry.value;
-              final song = _selectedSongs.firstWhere((s) => s.id == songId);
-              
-              return Container(
-                margin: EdgeInsets.only(bottom: 12.h),
-                padding: EdgeInsets.all(16.w),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(12.r),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.music_note_rounded,
-                          color: Theme.of(context).colorScheme.primary,
-                          size: 20.sp,
-                        ),
-                        SizedBox(width: 8.w),
-                        Expanded(
-                          child: Text(
-                            song.title,
-                            style: GoogleFonts.poppins(
-                              fontSize: 14.sp,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () => _showDetailedResults(song, features),
-                          icon: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-                          tooltip: 'View Details',
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 12.h),
-                    Wrap(
-                      spacing: 8.w,
-                      runSpacing: 8.h,
-                      children: [
-                        _buildFeatureChip('Genre', features.estimatedGenre, Colors.purple),
-                        _buildFeatureChip('Tempo', '${features.tempoBpm.toStringAsFixed(0)} BPM', Colors.blue),
-                        _buildFeatureChip('Energy', features.energy, Colors.orange),
-                        _buildFeatureChip('Mood', features.mood, Colors.green),
-                      ],
-                    ),
+  Widget _buildFeaturesGrid(ExtractedSongFeatures features) {
+    final featureData = [
+      {'name': 'Genre', 'value': features.estimatedGenre, 'color': Colors.purple, 'icon': Icons.music_note_rounded},
+      {'name': 'Tempo', 'value': '${features.tempoBpm.toStringAsFixed(0)} BPM', 'color': Colors.blue, 'icon': Icons.speed_rounded},
+      {'name': 'Energy', 'value': features.energy, 'color': Colors.orange, 'icon': Icons.flash_on_rounded},
+      {'name': 'Mood', 'value': features.mood, 'color': Colors.green, 'icon': Icons.sentiment_very_satisfied_rounded},
+      {'name': 'Danceability', 'value': features.danceability.toStringAsFixed(2), 'color': Colors.pink, 'icon': Icons.music_note_rounded},
+      {'name': 'Confidence', 'value': features.confidence.toStringAsFixed(2), 'color': Colors.indigo, 'icon': Icons.psychology_rounded},
+      {'name': 'Has Vocals', 'value': features.hasVocals ? 'Yes' : 'No', 'color': Colors.teal, 'icon': Icons.mic_rounded},
+      {'name': 'Spectral Centroid', 'value': features.spectralCentroid.toStringAsFixed(1), 'color': Colors.cyan, 'icon': Icons.trending_up_rounded},
+      {'name': 'Zero Crossing Rate', 'value': features.zeroCrossingRate.toStringAsFixed(3), 'color': Colors.amber, 'icon': Icons.waves_rounded},
+      {'name': 'Spectral Rolloff', 'value': features.spectralRolloff.toStringAsFixed(1), 'color': Colors.deepOrange, 'icon': Icons.show_chart_rounded},
+      {'name': 'Spectral Flux', 'value': features.spectralFlux.toStringAsFixed(3), 'color': Colors.lime, 'icon': Icons.auto_graph_rounded},
+      {'name': 'Beat Strength', 'value': features.beatStrength.toStringAsFixed(2), 'color': Colors.red, 'icon': Icons.trending_up_rounded},
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount = constraints.maxWidth > 600 ? 3 : constraints.maxWidth > 400 ? 2 : 1;
+        
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            crossAxisSpacing: 16.w,
+            mainAxisSpacing: 16.h,
+            childAspectRatio: 2.2,
+          ),
+          itemCount: featureData.length,
+          itemBuilder: (context, index) {
+            final feature = featureData[index];
+            final color = feature['color'] as Color;
+            final icon = feature['icon'] as IconData;
+            
+            return Container(
+              padding: EdgeInsets.all(10.w),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    color.withValues(alpha: 0.1),
+                    color.withValues(alpha: 0.05),
                   ],
                 ),
-              );
-            }),
-          ],
-        ),
-      ),
+                borderRadius: BorderRadius.circular(12.r),
+                border: Border.all(
+                  color: color.withValues(alpha: 0.2),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(6.w),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(6.r),
+                        ),
+                        child: Icon(
+                          icon,
+                          size: 16.sp,
+                          color: color,
+                        ),
+                      ),
+                      SizedBox(width: 8.w),
+                      Expanded(
+                        child: Text(
+                          feature['name'] as String,
+                          style: GoogleFonts.poppins(
+                            fontSize: 11.sp,
+                            fontWeight: FontWeight.w500,
+                            color: color,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 8.h),
+                  Text(
+                    feature['value'] as String,
+                    style: GoogleFonts.poppins(
+                      fontSize: 16.sp,
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
-  Widget _buildFeatureChip(String label, String value, Color color) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8.r),
-        border: Border.all(
-          color: color.withValues(alpha: 0.3),
-          width: 1,
+  String _formatDuration(int seconds) {
+    final minutes = seconds ~/ 60;
+    final remainingSeconds = seconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _analyzeNewSongs(List<SongModel> newSongs) async {
+    if (!_isInitialized) {
+      _logger.w('System not initialized, skipping automatic analysis');
+      return;
+    }
+
+    _logger.i('🤖 Automatically analyzing ${newSongs.length} new songs in background...');
+    
+    setState(() {
+      _isProcessingInBackground = true;
+    });
+    
+    try {
+      await MusicFeatureAnalyzer.extractFeaturesInBackground(
+        newSongs.map((s) => s.filePath).toList(),
+        onProgress: (current, total) {
+          _logger.d('📊 Auto-analysis progress: $current/$total songs processed');
+        },
+        onSongUpdated: (filePath, features) {
+          _logger.d('🔄 Auto-analysis updated: ${filePath.split('/').last}');
+          if (features != null) {
+            setState(() {
+              final songId = filePath.hashCode.toString();
+              _songFeatures[songId] = features;
+            });
+          }
+        },
+        onCompleted: () {
+          _logger.i('✅ Automatic background analysis completed for ${newSongs.length} songs');
+          setState(() {
+            _isProcessingInBackground = false;
+          });
+        },
+        onError: (error) {
+          _logger.e('❌ Auto-analysis error: $error');
+          setState(() {
+            _isProcessingInBackground = false;
+          });
+        },
+      );
+    } catch (e) {
+      _logger.e('Auto-analysis failed: $e');
+      setState(() {
+        _isProcessingInBackground = false;
+      });
+    }
+  }
+
+  Future<void> _extractSingleSongFeatures(SongModel song) async {
+    if (!_isInitialized) {
+      _showSnackBar('Please initialize the analyzer first', Colors.orange);
+      return;
+    }
+
+    try {
+      _logger.i('Starting analysis for: ${song.title}');
+      
+      final features = await MusicFeatureAnalyzer.analyzeSong(song);
+      
+      if (features != null) {
+        setState(() {
+          _songFeatures[song.id] = features;
+        });
+        _logger.i('✅ Analysis completed for: ${song.title}');
+        _showSnackBar('✅ Analysis completed for ${song.title}', Colors.green);
+      } else {
+        _logger.e('❌ Analysis failed for: ${song.title}');
+        _showSnackBar('❌ Analysis failed for ${song.title}', Colors.red);
+      }
+    } catch (e) {
+      _logger.e('Analysis error for ${song.title}: $e');
+      _showSnackBar('❌ Analysis error: $e', Colors.red);
+    }
+  }
+
+  void _showSnackBar(String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
         ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '$label: ',
-            style: GoogleFonts.poppins(
-              fontSize: 11.sp,
-              fontWeight: FontWeight.w500,
-              color: color,
-            ),
-          ),
-          Text(
-            value,
-            style: GoogleFonts.poppins(
-              fontSize: 11.sp,
-              color: color,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -752,19 +698,29 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       
       if (result != null) {
-        final newSongs = result.files.take(4 - _selectedSongs.length).map((file) => SongModel(
-          id: file.path!.hashCode.toString(),
-          title: file.name,
-          artist: 'Unknown',
-          album: 'Unknown',
-          duration: 0,
-          filePath: file.path!,
-        )).toList();
+        final remainingSlots = _maxSongs - _selectedSongs.length;
+        final newSongs = <SongModel>[];
+        for (final file in result.files.take(remainingSlots)) {
+          final duration = await _getAudioDuration(file.path!);
+          newSongs.add(SongModel(
+            id: file.path!.hashCode.toString(),
+            title: file.name,
+            artist: 'Unknown',
+            album: 'Unknown',
+            duration: duration,
+            filePath: file.path!,
+          ));
+        }
         
         setState(() {
           _selectedSongs.addAll(newSongs);
         });
         _logger.i('Added ${newSongs.length} music files');
+        
+        // Automatically analyze new songs if system is initialized
+        if (_isInitialized && newSongs.isNotEmpty) {
+          _analyzeNewSongs(newSongs);
+        }
       }
     } catch (e) {
       _logger.e('Error selecting music files: $e');
@@ -778,25 +734,35 @@ class _HomeScreenState extends State<HomeScreen> {
       
       if (result != null) {
         final directory = Directory(result);
+        final remainingSlots = _maxSongs - _selectedSongs.length;
         final audioFiles = await directory.list()
             .where((entity) => entity is File && _isAudioFile(entity.path))
             .cast<File>()
-            .take(4 - _selectedSongs.length)
+            .take(remainingSlots)
             .toList();
         
-        final newSongs = audioFiles.map((file) => SongModel(
-          id: file.path.hashCode.toString(),
-          title: file.path.split('/').last,
-          artist: 'Unknown',
-          album: 'Unknown',
-          duration: 0,
-          filePath: file.path,
-        )).toList();
+        final newSongs = <SongModel>[];
+        for (final file in audioFiles) {
+          final duration = await _getAudioDuration(file.path);
+          newSongs.add(SongModel(
+            id: file.path.hashCode.toString(),
+            title: file.path.split('/').last,
+            artist: 'Unknown',
+            album: 'Unknown',
+            duration: duration,
+            filePath: file.path,
+          ));
+        }
         
         setState(() {
           _selectedSongs.addAll(newSongs);
         });
         _logger.i('Added ${newSongs.length} music files from folder');
+        
+        // Automatically analyze new songs if system is initialized
+        if (_isInitialized && newSongs.isNotEmpty) {
+          _analyzeNewSongs(newSongs);
+        }
       }
     } catch (e) {
       _logger.e('Error selecting music folder: $e');
@@ -809,11 +775,18 @@ class _HomeScreenState extends State<HomeScreen> {
     return ['mp3', 'wav', 'flac', 'm4a', 'aac', 'ogg'].contains(extension);
   }
 
-  void _clearAllSongs() {
-    setState(() {
-      _selectedSongs.clear();
-      _songFeatures.clear();
-    });
+  Future<int> _getAudioDuration(String filePath) async {
+    try {
+      final file = File(filePath);
+      if (await file.exists()) {
+        // For now, return a placeholder duration
+        // In a real implementation, you'd use a package like audio_service or ffmpeg
+        return 180; // 3 minutes placeholder
+      }
+    } catch (e) {
+      _logger.e('Error getting duration for $filePath: $e');
+    }
+    return 0;
   }
 
   Future<void> _extractAllFeatures() async {
@@ -828,31 +801,21 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     setState(() {
-      _isAnalyzing = true;
-      _progress = 0.0;
-      _processedCount = 0;
-      _totalCount = _selectedSongs.length;
+      _isProcessingInBackground = true;
     });
 
     try {
-      _logger.i('Starting analysis of ${_selectedSongs.length} songs');
+      _logger.i('Starting background analysis of ${_selectedSongs.length} songs');
       
       await MusicFeatureAnalyzer.extractFeaturesInBackground(
         _selectedSongs.map((s) => s.filePath).toList(),
         onProgress: (current, total) {
           _logger.d('📊 Feature extraction progress: $current/$total songs processed');
-          setState(() {
-            _progress = current / total;
-            _processedCount = current;
-            _totalCount = total;
-          });
         },
         onSongUpdated: (filePath, features) {
           _logger.d('🔄 Updated song: ${filePath.split('/').last}');
           if (features != null) {
-            _logger.d('🔍 Features: ${features.estimatedGenre} | ${features.tempoBpm} BPM');
             setState(() {
-              _currentSong = filePath.split('/').last;
               final songId = filePath.hashCode.toString();
               _songFeatures[songId] = features;
             });
@@ -861,16 +824,14 @@ class _HomeScreenState extends State<HomeScreen> {
         onCompleted: () {
           _logger.i('✅ Background feature extraction completed');
           setState(() {
-            _isAnalyzing = false;
-            _progress = 1.0;
-            _processedCount = _totalCount;
+            _isProcessingInBackground = false;
           });
           _showSnackBar('All features extracted successfully!', Colors.green);
         },
         onError: (error) {
           _logger.e('❌ Background feature extraction error: $error');
           setState(() {
-            _isAnalyzing = false;
+            _isProcessingInBackground = false;
           });
           _showSnackBar('Feature extraction failed: $error', Colors.red);
         },
@@ -878,204 +839,9 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       _logger.e('Feature extraction failed: $e');
       setState(() {
-        _isAnalyzing = false;
+        _isProcessingInBackground = false;
       });
       _showSnackBar('Feature extraction failed: $e', Colors.red);
     }
-  }
-
-  Future<void> _extractPendingFeatures() async {
-    if (!_isInitialized) {
-      _showSnackBar('Please initialize the analyzer first', Colors.orange);
-      return;
-    }
-
-    final pendingSongs = _selectedSongs.where((song) => !_songFeatures.containsKey(song.id)).toList();
-    
-    if (pendingSongs.isEmpty) {
-      _showSnackBar('No pending songs to analyze', Colors.blue);
-      return;
-    }
-
-    setState(() {
-      _isAnalyzing = true;
-      _progress = 0.0;
-      _processedCount = 0;
-      _totalCount = pendingSongs.length;
-    });
-
-    try {
-      _logger.i('Starting analysis of ${pendingSongs.length} pending songs');
-      
-      await MusicFeatureAnalyzer.extractFeaturesInBackground(
-        pendingSongs.map((s) => s.filePath).toList(),
-        onProgress: (current, total) {
-          _logger.d('📊 Feature extraction progress: $current/$total songs processed');
-          setState(() {
-            _progress = current / total;
-            _processedCount = current;
-            _totalCount = total;
-          });
-        },
-        onSongUpdated: (filePath, features) {
-          _logger.d('🔄 Updated song: ${filePath.split('/').last}');
-          if (features != null) {
-            _logger.d('🔍 Features: ${features.estimatedGenre} | ${features.tempoBpm} BPM');
-            setState(() {
-              _currentSong = filePath.split('/').last;
-              final songId = filePath.hashCode.toString();
-              _songFeatures[songId] = features;
-            });
-          }
-        },
-        onCompleted: () {
-          _logger.i('✅ Pending feature extraction completed');
-          setState(() {
-            _isAnalyzing = false;
-            _progress = 1.0;
-            _processedCount = _totalCount;
-          });
-          _showSnackBar('Pending features extracted successfully!', Colors.green);
-        },
-        onError: (error) {
-          _logger.e('❌ Pending feature extraction error: $error');
-          setState(() {
-            _isAnalyzing = false;
-          });
-          _showSnackBar('Pending feature extraction failed: $error', Colors.red);
-        },
-      );
-    } catch (e) {
-      _logger.e('Pending feature extraction failed: $e');
-      setState(() {
-        _isAnalyzing = false;
-      });
-      _showSnackBar('Pending feature extraction failed: $e', Colors.red);
-    }
-  }
-
-  void _clearAllFeatures() {
-    setState(() {
-      _songFeatures.clear();
-    });
-    _logger.i('All features cleared');
-    _showSnackBar('All features cleared!', Colors.blue);
-  }
-
-  void _cancelAnalysis() {
-    setState(() {
-      _isAnalyzing = false;
-      _progress = 0.0;
-      _currentSong = '';
-      _processedCount = 0;
-      _totalCount = 0;
-    });
-    _logger.i('Analysis cancelled');
-  }
-
-  Future<void> _initializeAnalyzer() async {
-    try {
-      _logger.i('Initializing Music Feature Analyzer...');
-      final success = await MusicFeatureAnalyzer.initialize();
-      
-      setState(() {
-        _isInitialized = success;
-      });
-      
-      if (success) {
-        _logger.i('✅ Music Feature Analyzer initialized successfully');
-        _showSnackBar('✅ Analyzer initialized successfully!', Colors.green);
-      } else {
-        _logger.e('❌ Music Feature Analyzer initialization failed');
-        _showSnackBar('❌ Initialization failed', Colors.red);
-      }
-    } catch (e) {
-      _logger.e('Initialization error: $e');
-      _showSnackBar('❌ Initialization error: $e', Colors.red);
-    }
-  }
-
-  void _showDetailedResults(SongModel song, ExtractedSongFeatures features) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          song.title,
-          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                song.artist,
-                style: GoogleFonts.poppins(
-                  fontSize: 14.sp,
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                ),
-              ),
-              SizedBox(height: 20.h),
-              _buildDetailRow('Genre', features.estimatedGenre),
-              _buildDetailRow('Tempo', '${features.tempoBpm.toStringAsFixed(1)} BPM'),
-              _buildDetailRow('Energy', features.energy),
-              _buildDetailRow('Mood', features.mood),
-              _buildDetailRow('Instruments', features.instruments.join(', ')),
-              _buildDetailRow('Has Vocals', features.hasVocals ? 'Yes' : 'No'),
-              _buildDetailRow('Danceability', features.danceability.toStringAsFixed(2)),
-              _buildDetailRow('Confidence', features.confidence.toStringAsFixed(2)),
-              _buildDetailRow('Spectral Centroid', features.spectralCentroid.toStringAsFixed(1)),
-              _buildDetailRow('Zero Crossing Rate', features.zeroCrossingRate.toStringAsFixed(3)),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 4.h),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120.w,
-            child: Text(
-              '$label:',
-              style: GoogleFonts.poppins(
-                fontSize: 12.sp,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: GoogleFonts.poppins(fontSize: 12.sp),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showSnackBar(String message, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: color,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-    );
   }
 }
