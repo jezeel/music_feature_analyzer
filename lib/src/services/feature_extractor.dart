@@ -9,7 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
 import '../models/song_model.dart';
-import '../models/song_features.dart';
+import '../models/extracted_song_features.dart';
 import '../utils/app_logger.dart';
 import '../music_feature_analyzer_base.dart';
 
@@ -70,7 +70,7 @@ class FeatureExtractor {
   }
 
   /// Extract features for a single song
-  Future<SongFeatures?> extractSongFeatures(SongModel song) async {
+  Future<ExtractedSongFeatures?> extractSongFeatures(SongModel song) async {
     if (!_isInitialized) {
       _logger.e('❌ Feature Extractor not initialized');
       return null;
@@ -990,12 +990,12 @@ class FeatureExtractor {
   }
 
   /// Combine YAMNet and signal processing results
-  SongFeatures _combineResults(
+  ExtractedSongFeatures _combineResults(
     YAMNetResults yamnetResults,
     SignalProcessingResults signalResults,
     SongModel song,
   ) {
-    return SongFeatures(
+    return ExtractedSongFeatures(
       // Basic categorical features
       tempo: _categorizeTempo(signalResults.tempoBpm),
       beat: _categorizeBeat(signalResults.beatStrength),
@@ -1105,7 +1105,7 @@ class FeatureExtractor {
   }
 
   /// Update statistics
-  void _updateStatistics(SongFeatures features) {
+  void _updateStatistics(ExtractedSongFeatures features) {
     // Update genre counts
     _genreCounts[features.estimatedGenre] = 
         (_genreCounts[features.estimatedGenre] ?? 0) + 1;
@@ -1132,8 +1132,8 @@ class FeatureExtractor {
 
 
   /// Extract features from multiple songs (batch processing)
-  Future<List<SongFeatures>> extractMultipleSongs(List<SongModel> songs) async {
-    final results = <SongFeatures>[];
+  Future<List<ExtractedSongFeatures>> extractMultipleSongs(List<SongModel> songs) async {
+    final results = <ExtractedSongFeatures>[];
     
     for (final song in songs) {
       try {

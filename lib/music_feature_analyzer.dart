@@ -27,7 +27,7 @@
 
 library music_feature_analyzer;
 
-export 'src/models/song_features.dart';
+export 'src/models/extracted_song_features.dart';
 export 'src/models/song_model.dart';
 export 'src/services/feature_extractor.dart' hide AnalysisStats;
 export 'src/music_feature_analyzer_base.dart';

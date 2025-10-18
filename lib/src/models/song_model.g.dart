@@ -16,7 +16,9 @@ _$SongModelImpl _$$SongModelImplFromJson(Map<String, dynamic> json) =>
       filePath: json['filePath'] as String,
       features: json['features'] == null
           ? null
-          : SongFeatures.fromJson(json['features'] as Map<String, dynamic>),
+          : ExtractedSongFeatures.fromJson(
+              json['features'] as Map<String, dynamic>,
+            ),
       albumArt: json['albumArt'] as String?,
       year: (json['year'] as num?)?.toInt(),
       genre: json['genre'] as String?,

@@ -3,7 +3,7 @@
 // ignore_for_file: type=lint
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
-part of 'song_features.dart';
+part of 'extracted_song_features.dart';
 
 // **************************************************************************
 // FreezedGenerator
@@ -15,12 +15,14 @@ final _privateConstructorUsedError = UnsupportedError(
   'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
 );
 
-SongFeatures _$SongFeaturesFromJson(Map<String, dynamic> json) {
-  return _SongFeatures.fromJson(json);
+ExtractedSongFeatures _$ExtractedSongFeaturesFromJson(
+  Map<String, dynamic> json,
+) {
+  return _ExtractedSongFeatures.fromJson(json);
 }
 
 /// @nodoc
-mixin _$SongFeatures {
+mixin _$ExtractedSongFeatures {
   // Basic categorical features
   String get tempo =>
       throw _privateConstructorUsedError; // e.g. "Fast", "Medium", "Slow"
@@ -81,22 +83,22 @@ mixin _$SongFeatures {
       throw _privateConstructorUsedError; // When analysis was performed
   String get analyzerVersion => throw _privateConstructorUsedError;
 
-  /// Serializes this SongFeatures to a JSON map.
+  /// Serializes this ExtractedSongFeatures to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
 
-  /// Create a copy of SongFeatures
+  /// Create a copy of ExtractedSongFeatures
   /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
-  $SongFeaturesCopyWith<SongFeatures> get copyWith =>
+  $ExtractedSongFeaturesCopyWith<ExtractedSongFeatures> get copyWith =>
       throw _privateConstructorUsedError;
 }
 
 /// @nodoc
-abstract class $SongFeaturesCopyWith<$Res> {
-  factory $SongFeaturesCopyWith(
-    SongFeatures value,
-    $Res Function(SongFeatures) then,
-  ) = _$SongFeaturesCopyWithImpl<$Res, SongFeatures>;
+abstract class $ExtractedSongFeaturesCopyWith<$Res> {
+  factory $ExtractedSongFeaturesCopyWith(
+    ExtractedSongFeatures value,
+    $Res Function(ExtractedSongFeatures) then,
+  ) = _$ExtractedSongFeaturesCopyWithImpl<$Res, ExtractedSongFeatures>;
   @useResult
   $Res call({
     String tempo,
@@ -131,16 +133,19 @@ abstract class $SongFeaturesCopyWith<$Res> {
 }
 
 /// @nodoc
-class _$SongFeaturesCopyWithImpl<$Res, $Val extends SongFeatures>
-    implements $SongFeaturesCopyWith<$Res> {
-  _$SongFeaturesCopyWithImpl(this._value, this._then);
+class _$ExtractedSongFeaturesCopyWithImpl<
+  $Res,
+  $Val extends ExtractedSongFeatures
+>
+    implements $ExtractedSongFeaturesCopyWith<$Res> {
+  _$ExtractedSongFeaturesCopyWithImpl(this._value, this._then);
 
   // ignore: unused_field
   final $Val _value;
   // ignore: unused_field
   final $Res Function($Val) _then;
 
-  /// Create a copy of SongFeatures
+  /// Create a copy of ExtractedSongFeatures
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
@@ -295,12 +300,12 @@ class _$SongFeaturesCopyWithImpl<$Res, $Val extends SongFeatures>
 }
 
 /// @nodoc
-abstract class _$$SongFeaturesImplCopyWith<$Res>
-    implements $SongFeaturesCopyWith<$Res> {
-  factory _$$SongFeaturesImplCopyWith(
-    _$SongFeaturesImpl value,
-    $Res Function(_$SongFeaturesImpl) then,
-  ) = __$$SongFeaturesImplCopyWithImpl<$Res>;
+abstract class _$$ExtractedSongFeaturesImplCopyWith<$Res>
+    implements $ExtractedSongFeaturesCopyWith<$Res> {
+  factory _$$ExtractedSongFeaturesImplCopyWith(
+    _$ExtractedSongFeaturesImpl value,
+    $Res Function(_$ExtractedSongFeaturesImpl) then,
+  ) = __$$ExtractedSongFeaturesImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call({
@@ -336,15 +341,16 @@ abstract class _$$SongFeaturesImplCopyWith<$Res>
 }
 
 /// @nodoc
-class __$$SongFeaturesImplCopyWithImpl<$Res>
-    extends _$SongFeaturesCopyWithImpl<$Res, _$SongFeaturesImpl>
-    implements _$$SongFeaturesImplCopyWith<$Res> {
-  __$$SongFeaturesImplCopyWithImpl(
-    _$SongFeaturesImpl _value,
-    $Res Function(_$SongFeaturesImpl) _then,
+class __$$ExtractedSongFeaturesImplCopyWithImpl<$Res>
+    extends
+        _$ExtractedSongFeaturesCopyWithImpl<$Res, _$ExtractedSongFeaturesImpl>
+    implements _$$ExtractedSongFeaturesImplCopyWith<$Res> {
+  __$$ExtractedSongFeaturesImplCopyWithImpl(
+    _$ExtractedSongFeaturesImpl _value,
+    $Res Function(_$ExtractedSongFeaturesImpl) _then,
   ) : super(_value, _then);
 
-  /// Create a copy of SongFeatures
+  /// Create a copy of ExtractedSongFeatures
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
@@ -379,7 +385,7 @@ class __$$SongFeaturesImplCopyWithImpl<$Res>
     Object? analyzerVersion = null,
   }) {
     return _then(
-      _$SongFeaturesImpl(
+      _$ExtractedSongFeaturesImpl(
         tempo: null == tempo
             ? _value.tempo
             : tempo // ignore: cast_nullable_to_non_nullable
@@ -499,8 +505,8 @@ class __$$SongFeaturesImplCopyWithImpl<$Res>
 
 /// @nodoc
 @JsonSerializable()
-class _$SongFeaturesImpl implements _SongFeatures {
-  const _$SongFeaturesImpl({
+class _$ExtractedSongFeaturesImpl implements _ExtractedSongFeatures {
+  const _$ExtractedSongFeaturesImpl({
     required this.tempo,
     required this.beat,
     required this.energy,
@@ -533,8 +539,8 @@ class _$SongFeaturesImpl implements _SongFeatures {
        _yamnetInstruments = yamnetInstruments,
        _moodTags = moodTags;
 
-  factory _$SongFeaturesImpl.fromJson(Map<String, dynamic> json) =>
-      _$$SongFeaturesImplFromJson(json);
+  factory _$ExtractedSongFeaturesImpl.fromJson(Map<String, dynamic> json) =>
+      _$$ExtractedSongFeaturesImplFromJson(json);
 
   // Basic categorical features
   @override
@@ -650,14 +656,14 @@ class _$SongFeaturesImpl implements _SongFeatures {
 
   @override
   String toString() {
-    return 'SongFeatures(tempo: $tempo, beat: $beat, energy: $energy, instruments: $instruments, vocals: $vocals, mood: $mood, yamnetInstruments: $yamnetInstruments, hasVocals: $hasVocals, estimatedGenre: $estimatedGenre, yamnetEnergy: $yamnetEnergy, moodTags: $moodTags, tempoBpm: $tempoBpm, beatStrength: $beatStrength, signalEnergy: $signalEnergy, brightness: $brightness, danceability: $danceability, overallEnergy: $overallEnergy, intensity: $intensity, spectralCentroid: $spectralCentroid, spectralRolloff: $spectralRolloff, zeroCrossingRate: $zeroCrossingRate, spectralFlux: $spectralFlux, complexity: $complexity, valence: $valence, arousal: $arousal, confidence: $confidence, analyzedAt: $analyzedAt, analyzerVersion: $analyzerVersion)';
+    return 'ExtractedSongFeatures(tempo: $tempo, beat: $beat, energy: $energy, instruments: $instruments, vocals: $vocals, mood: $mood, yamnetInstruments: $yamnetInstruments, hasVocals: $hasVocals, estimatedGenre: $estimatedGenre, yamnetEnergy: $yamnetEnergy, moodTags: $moodTags, tempoBpm: $tempoBpm, beatStrength: $beatStrength, signalEnergy: $signalEnergy, brightness: $brightness, danceability: $danceability, overallEnergy: $overallEnergy, intensity: $intensity, spectralCentroid: $spectralCentroid, spectralRolloff: $spectralRolloff, zeroCrossingRate: $zeroCrossingRate, spectralFlux: $spectralFlux, complexity: $complexity, valence: $valence, arousal: $arousal, confidence: $confidence, analyzedAt: $analyzedAt, analyzerVersion: $analyzerVersion)';
   }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$SongFeaturesImpl &&
+            other is _$ExtractedSongFeaturesImpl &&
             (identical(other.tempo, tempo) || other.tempo == tempo) &&
             (identical(other.beat, beat) || other.beat == beat) &&
             (identical(other.energy, energy) || other.energy == energy) &&
@@ -746,22 +752,26 @@ class _$SongFeaturesImpl implements _SongFeatures {
     analyzerVersion,
   ]);
 
-  /// Create a copy of SongFeatures
+  /// Create a copy of ExtractedSongFeatures
   /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   @pragma('vm:prefer-inline')
-  _$$SongFeaturesImplCopyWith<_$SongFeaturesImpl> get copyWith =>
-      __$$SongFeaturesImplCopyWithImpl<_$SongFeaturesImpl>(this, _$identity);
+  _$$ExtractedSongFeaturesImplCopyWith<_$ExtractedSongFeaturesImpl>
+  get copyWith =>
+      __$$ExtractedSongFeaturesImplCopyWithImpl<_$ExtractedSongFeaturesImpl>(
+        this,
+        _$identity,
+      );
 
   @override
   Map<String, dynamic> toJson() {
-    return _$$SongFeaturesImplToJson(this);
+    return _$$ExtractedSongFeaturesImplToJson(this);
   }
 }
 
-abstract class _SongFeatures implements SongFeatures {
-  const factory _SongFeatures({
+abstract class _ExtractedSongFeatures implements ExtractedSongFeatures {
+  const factory _ExtractedSongFeatures({
     required final String tempo,
     required final String beat,
     required final String energy,
@@ -790,10 +800,10 @@ abstract class _SongFeatures implements SongFeatures {
     required final double confidence,
     required final DateTime analyzedAt,
     required final String analyzerVersion,
-  }) = _$SongFeaturesImpl;
+  }) = _$ExtractedSongFeaturesImpl;
 
-  factory _SongFeatures.fromJson(Map<String, dynamic> json) =
-      _$SongFeaturesImpl.fromJson;
+  factory _ExtractedSongFeatures.fromJson(Map<String, dynamic> json) =
+      _$ExtractedSongFeaturesImpl.fromJson;
 
   // Basic categorical features
   @override
@@ -857,10 +867,10 @@ abstract class _SongFeatures implements SongFeatures {
   @override
   String get analyzerVersion;
 
-  /// Create a copy of SongFeatures
+  /// Create a copy of ExtractedSongFeatures
   /// with the given fields replaced by the non-null parameter values.
   @override
   @JsonKey(includeFromJson: false, includeToJson: false)
-  _$$SongFeaturesImplCopyWith<_$SongFeaturesImpl> get copyWith =>
-      throw _privateConstructorUsedError;
+  _$$ExtractedSongFeaturesImplCopyWith<_$ExtractedSongFeaturesImpl>
+  get copyWith => throw _privateConstructorUsedError;
 }

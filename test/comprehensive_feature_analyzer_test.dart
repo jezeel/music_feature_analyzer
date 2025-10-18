@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_feature_analyzer/music_feature_analyzer.dart';
-import 'package:music_feature_analyzer/src/models/song_features.dart';
+import 'package:music_feature_analyzer/src/models/extracted_song_features.dart';
 import 'package:music_feature_analyzer/src/models/song_model.dart';
 import 'package:music_feature_analyzer/src/services/feature_extractor.dart';
 
@@ -60,8 +60,8 @@ void main() {
         expect(song.features, null);
       });
 
-      test('SongFeatures model should work correctly', () {
-        final features = SongFeatures(
+      test('ExtractedSongFeatures model should work correctly', () {
+        final features = ExtractedSongFeatures(
           tempo: 'Fast',
           beat: 'Strong',
           energy: 'High',

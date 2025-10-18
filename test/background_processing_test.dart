@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:music_feature_analyzer/src/models/song_features.dart';
+import 'package:music_feature_analyzer/src/models/extracted_song_features.dart';
 import 'package:music_feature_analyzer/src/models/song_model.dart';
 
 /// Comprehensive background processing tests for Music Feature Analyzer
@@ -58,7 +58,7 @@ void main() {
           '/test/song3.mp3',
         ];
 
-        final updatedSongs = <String, SongFeatures?>{};
+        final updatedSongs = <String, ExtractedSongFeatures?>{};
         int songUpdatedCount = 0;
 
         // Simulate song processing with callbacks
@@ -658,14 +658,14 @@ void main() {
 // ============================================================================
 
 /// Create mock song features for testing
-SongFeatures _createMockSongFeatures({
+ExtractedSongFeatures _createMockSongFeatures({
   required String tempo,
   required String energy,
   required String genre,
   required List<String> instruments,
   required bool hasVocals,
 }) {
-  return SongFeatures(
+  return ExtractedSongFeatures(
     tempo: tempo,
     beat: 'Medium',
     energy: energy,

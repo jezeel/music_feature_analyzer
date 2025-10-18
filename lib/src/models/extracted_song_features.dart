@@ -1,12 +1,12 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
-part 'song_features.freezed.dart';
-part 'song_features.g.dart';
+part 'extracted_song_features.freezed.dart';
+part 'extracted_song_features.g.dart';
 
 /// Comprehensive song features extracted by the analyzer
 @freezed
-class SongFeatures with _$SongFeatures {
-  const factory SongFeatures({
+class ExtractedSongFeatures with _$ExtractedSongFeatures {
+  const factory ExtractedSongFeatures({
     // Basic categorical features
     required String tempo, // e.g. "Fast", "Medium", "Slow"
     required String beat, // e.g. "Strong", "Soft", "No Beat"
@@ -44,8 +44,8 @@ class SongFeatures with _$SongFeatures {
     // Analysis metadata
     required DateTime analyzedAt, // When analysis was performed
     required String analyzerVersion, // Analyzer version used
-  }) = _SongFeatures;
+  }) = _ExtractedSongFeatures;
 
-  factory SongFeatures.fromJson(Map<String, dynamic> json) => _$SongFeaturesFromJson(json);
+  factory ExtractedSongFeatures.fromJson(Map<String, dynamic> json) => _$ExtractedSongFeaturesFromJson(json);
 }
 

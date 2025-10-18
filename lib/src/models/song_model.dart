@@ -1,5 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'song_features.dart';
+import 'extracted_song_features.dart';
 
 part 'song_model.freezed.dart';
 part 'song_model.g.dart';
@@ -14,7 +14,7 @@ class SongModel with _$SongModel {
     required String album,
     required int duration,
     required String filePath,
-    SongFeatures? features,
+    ExtractedSongFeatures? features,
     String? albumArt,
     int? year,
     String? genre,

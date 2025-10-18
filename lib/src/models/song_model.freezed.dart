@@ -27,7 +27,7 @@ mixin _$SongModel {
   String get album => throw _privateConstructorUsedError;
   int get duration => throw _privateConstructorUsedError;
   String get filePath => throw _privateConstructorUsedError;
-  SongFeatures? get features => throw _privateConstructorUsedError;
+  ExtractedSongFeatures? get features => throw _privateConstructorUsedError;
   String? get albumArt => throw _privateConstructorUsedError;
   int? get year => throw _privateConstructorUsedError;
   String? get genre => throw _privateConstructorUsedError;
@@ -55,14 +55,14 @@ abstract class $SongModelCopyWith<$Res> {
     String album,
     int duration,
     String filePath,
-    SongFeatures? features,
+    ExtractedSongFeatures? features,
     String? albumArt,
     int? year,
     String? genre,
     int? trackNumber,
   });
 
-  $SongFeaturesCopyWith<$Res>? get features;
+  $ExtractedSongFeaturesCopyWith<$Res>? get features;
 }
 
 /// @nodoc
@@ -121,7 +121,7 @@ class _$SongModelCopyWithImpl<$Res, $Val extends SongModel>
             features: freezed == features
                 ? _value.features
                 : features // ignore: cast_nullable_to_non_nullable
-                      as SongFeatures?,
+                      as ExtractedSongFeatures?,
             albumArt: freezed == albumArt
                 ? _value.albumArt
                 : albumArt // ignore: cast_nullable_to_non_nullable
@@ -147,12 +147,12 @@ class _$SongModelCopyWithImpl<$Res, $Val extends SongModel>
   /// with the given fields replaced by the non-null parameter values.
   @override
   @pragma('vm:prefer-inline')
-  $SongFeaturesCopyWith<$Res>? get features {
+  $ExtractedSongFeaturesCopyWith<$Res>? get features {
     if (_value.features == null) {
       return null;
     }
 
-    return $SongFeaturesCopyWith<$Res>(_value.features!, (value) {
+    return $ExtractedSongFeaturesCopyWith<$Res>(_value.features!, (value) {
       return _then(_value.copyWith(features: value) as $Val);
     });
   }
@@ -174,7 +174,7 @@ abstract class _$$SongModelImplCopyWith<$Res>
     String album,
     int duration,
     String filePath,
-    SongFeatures? features,
+    ExtractedSongFeatures? features,
     String? albumArt,
     int? year,
     String? genre,
@@ -182,7 +182,7 @@ abstract class _$$SongModelImplCopyWith<$Res>
   });
 
   @override
-  $SongFeaturesCopyWith<$Res>? get features;
+  $ExtractedSongFeaturesCopyWith<$Res>? get features;
 }
 
 /// @nodoc
@@ -240,7 +240,7 @@ class __$$SongModelImplCopyWithImpl<$Res>
         features: freezed == features
             ? _value.features
             : features // ignore: cast_nullable_to_non_nullable
-                  as SongFeatures?,
+                  as ExtractedSongFeatures?,
         albumArt: freezed == albumArt
             ? _value.albumArt
             : albumArt // ignore: cast_nullable_to_non_nullable
@@ -295,7 +295,7 @@ class _$SongModelImpl implements _SongModel {
   @override
   final String filePath;
   @override
-  final SongFeatures? features;
+  final ExtractedSongFeatures? features;
   @override
   final String? albumArt;
   @override
@@ -372,7 +372,7 @@ abstract class _SongModel implements SongModel {
     required final String album,
     required final int duration,
     required final String filePath,
-    final SongFeatures? features,
+    final ExtractedSongFeatures? features,
     final String? albumArt,
     final int? year,
     final String? genre,
@@ -395,7 +395,7 @@ abstract class _SongModel implements SongModel {
   @override
   String get filePath;
   @override
-  SongFeatures? get features;
+  ExtractedSongFeatures? get features;
   @override
   String? get albumArt;
   @override
