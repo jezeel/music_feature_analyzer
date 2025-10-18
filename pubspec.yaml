@@ -2,6 +2,8 @@ name: music_feature_analyzer
 description: A comprehensive music feature analysis package using YAMNet AI and signal processing
 version: 1.0.0
 homepage: https://github.com/jezeel/music_feature_analyzer
+repository: https://github.com/jezeel/music_feature_analyzer
+issue_tracker: https://github.com/jezeel/music_feature_analyzer/issues
 
 environment:
   sdk: '>=3.8.1 <4.0.0'
