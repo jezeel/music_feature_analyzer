@@ -7,5 +7,37 @@ coverage/
 # Ignore test files that are not part of the public API
 test/
 
-# Ignore any remaining development documentation
+# Ignore development documentation
 INTEGRATION_EXAMPLE.md
+CONTRIBUTING.md
+
+# Ignore example app (development only)
+example/
+
+# Ignore auto-generated Flutter files
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/ephemeral/
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Runner/GeneratedPluginRegistrant.*
+
+# Ignore Android auto-generated files
+**/android/app/
+**/android/local.properties
+**/android/.gradle/
+**/android/build/
+**/android/.idea/
+
+# Ignore IDE files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore build artifacts
+*.dill
+*.track.dill

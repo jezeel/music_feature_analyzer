@@ -39,6 +39,12 @@ android {
     }
 }
 
+dependencies {
+    // Add the plugin as a direct dependency for local path dependencies
+    // This ensures the plugin classes are available at compile time
+    implementation(project(":music_feature_analyzer"))
+}
+
 flutter {
     source = "../.."
 }

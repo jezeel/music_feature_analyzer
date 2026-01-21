@@ -31,6 +31,14 @@ class FeatureExtractor {
   final Map<String, int> _genreCounts = {};
   final Map<String, int> _instrumentCounts = {};
 
+  /// Check if current platform supports full feature extraction
+  /// This package supports Android and iOS only
+  /// Returns true for Android/iOS, false for all other platforms
+  static bool _isPlatformSupported() {
+    if (kIsWeb) return false;
+    return Platform.isAndroid || Platform.isIOS;
+  }
+
   /// Initialize the feature extractor
   Future<bool> initialize() async {
     try {
@@ -40,6 +48,15 @@ class FeatureExtractor {
       }
 
       _logger.i('🚀 Initializing Feature Extractor...');
+
+      // Check platform support - This package supports Android and iOS only
+      if (!_isPlatformSupported()) {
+        _logger.e('❌ This package supports Android and iOS only');
+        _logger.e('❌ Current platform is not supported');
+        _logger.e('❌ Desktop and Web platforms are not supported');
+        _logger.e('❌ Please use this package on Android or iOS');
+        return false;
+      }
 
       // Load YAMNet model
       _logger.d('📦 Loading YAMNet model from assets...');
@@ -1130,24 +1147,6 @@ class FeatureExtractor {
     );
   }
 
-
-  /// Extract features from multiple songs (batch processing)
-  Future<List<ExtractedSongFeatures>> extractMultipleSongs(List<SongModel> songs) async {
-    final results = <ExtractedSongFeatures>[];
-    
-    for (final song in songs) {
-      try {
-        final features = await extractSongFeatures(song);
-        if (features != null) {
-          results.add(features);
-        }
-      } catch (e) {
-        _logger.e('❌ Error processing song ${song.title}: $e');
-      }
-    }
-    
-    return results;
-  }
 
   /// Reset statistics
   void resetStats() {

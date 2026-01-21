@@ -6,13 +6,9 @@ class AppLogger {
 
   AppLogger(this.context) {
     _logger = Logger(
-      printer: PrettyPrinter(
-        methodCount: 0,
-        errorMethodCount: 8,
-        lineLength: 120,
+      printer: SimplePrinter(
         colors: true,
-        printEmojis: true,
-        dateTimeFormat: DateTimeFormat.onlyTimeAndSinceStart,
+        printTime: true,
       ),
       filter: ProductionFilter(),
     );

@@ -6,9 +6,9 @@ part of 'extracted_song_features.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-_$ExtractedSongFeaturesImpl _$$ExtractedSongFeaturesImplFromJson(
+_ExtractedSongFeatures _$ExtractedSongFeaturesFromJson(
   Map<String, dynamic> json,
-) => _$ExtractedSongFeaturesImpl(
+) => _ExtractedSongFeatures(
   tempo: json['tempo'] as String,
   beat: json['beat'] as String,
   energy: json['energy'] as String,
@@ -45,8 +45,8 @@ _$ExtractedSongFeaturesImpl _$$ExtractedSongFeaturesImplFromJson(
   analyzerVersion: json['analyzerVersion'] as String,
 );
 
-Map<String, dynamic> _$$ExtractedSongFeaturesImplToJson(
-  _$ExtractedSongFeaturesImpl instance,
+Map<String, dynamic> _$ExtractedSongFeaturesToJson(
+  _ExtractedSongFeatures instance,
 ) => <String, dynamic>{
   'tempo': instance.tempo,
   'beat': instance.beat,

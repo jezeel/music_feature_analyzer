@@ -1,0 +1,125 @@
+group 'com.music_feature_analyzer'
+version '1.0.1-beta-01'
+
+buildscript {
+    ext.kotlin_version = '1.9.0'
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.1.0'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+// Get Flutter SDK path from local.properties or environment
+// Try plugin's local.properties first, then root project's (for subproject builds)
+def localProperties = new Properties()
+def localPropertiesFile = project.file('local.properties')
+if (!localPropertiesFile.exists() && project.hasProperty('rootProject')) {
+    localPropertiesFile = rootProject.file('local.properties')
+}
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader ->
+        localProperties.load(reader)
+    }
+}
+def flutterSdkPath = localProperties.getProperty('flutter.sdk') ?: System.getenv('FLUTTER_SDK')
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+android {
+    namespace 'com.music_feature_analyzer'
+    compileSdkVersion 34
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    defaultConfig {
+        minSdkVersion 21
+    }
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+    
+    // Flutter embedding dependency - required for FlutterPlugin, MethodChannel, etc.
+    // 
+    // IMPORTANT: For published packages (pub.dev), Flutter's build system automatically
+    // provides the Flutter embedding classes, so this manual lookup is only needed for
+    // local path dependencies (like the example app).
+    //
+    // When building through Flutter's normal process (flutter pub get + flutter build),
+    // the Flutter Gradle plugin handles these dependencies automatically.
+    //
+    // This code only runs when building the plugin as a standalone library (local path).
+    def flutterJar = null
+    
+    if (flutterSdkPath != null) {
+        // Try common Flutter engine artifact locations
+        def possiblePaths = [
+            "$flutterSdkPath/bin/cache/artifacts/engine/android-arm/flutter.jar",
+            "$flutterSdkPath/bin/cache/artifacts/engine/android/flutter.jar",
+            "$flutterSdkPath/bin/cache/artifacts/engine/android-arm64/flutter.jar",
+            "$flutterSdkPath/bin/cache/artifacts/engine/android-x64/flutter.jar",
+        ]
+        
+        for (path in possiblePaths) {
+            def file = file(path)
+            if (file.exists()) {
+                flutterJar = file
+                break
+            }
+        }
+        
+        // Last resort: try to find any flutter.jar in the artifacts directory
+        if (flutterJar == null) {
+            def artifactsDir = file("$flutterSdkPath/bin/cache/artifacts/engine")
+            if (artifactsDir.exists() && artifactsDir.isDirectory()) {
+                artifactsDir.eachDir { dir ->
+                    def jar = file("$dir/flutter.jar")
+                    if (jar.exists()) {
+                        flutterJar = jar
+                        return true // break out of eachDir
+                    }
+                }
+            }
+        }
+    }
+    
+    // Only add Flutter embedding if we found it (for local path builds)
+    // For published packages, Flutter's build system provides it automatically
+    if (flutterJar != null) {
+        compileOnly files(flutterJar)
+        println "music_feature_analyzer: Using Flutter embedding from: ${flutterJar.absolutePath}"
+    } else {
+        // This is OK for published packages - Flutter provides the dependency automatically
+        // Only warn if we're in a local build scenario
+        if (flutterSdkPath != null) {
+            println "music_feature_analyzer: Warning - Flutter embedding JAR not found at expected locations."
+            println "  Flutter SDK path: $flutterSdkPath"
+            println "  This is OK for published packages (Flutter provides dependencies automatically)."
+            println "  For local path builds, ensure Flutter SDK is properly configured."
+        }
+    }
+}

@@ -5,7 +5,7 @@ part 'extracted_song_features.g.dart';
 
 /// Comprehensive song features extracted by the analyzer
 @freezed
-class ExtractedSongFeatures with _$ExtractedSongFeatures {
+abstract class ExtractedSongFeatures with _$ExtractedSongFeatures {
   const factory ExtractedSongFeatures({
     // Basic categorical features
     required String tempo, // e.g. "Fast", "Medium", "Slow"

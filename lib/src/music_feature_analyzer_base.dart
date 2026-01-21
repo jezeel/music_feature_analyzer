@@ -1,11 +1,16 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'utils/app_logger.dart';
+import 'utils/permission_helper.dart';
 import 'models/extracted_song_features.dart';
 import 'models/song_model.dart';
 import 'services/feature_extractor.dart';
+import 'services/metadata_extractor/metadata_extractor.dart';
+import 'services/metadata_extractor/native_metadata_service.dart';
 
 /// ============================================================================
 /// MUSIC FEATURE ANALYZER - Main Package Entry Point
@@ -41,8 +46,18 @@ class MusicFeatureAnalyzer {
   // ============================================================================
   
   /// Initialize the music feature analyzer
+  /// 
+  /// **Platform Support**: This package supports Android and iOS only.
+  /// Desktop and Web platforms are not supported.
   static Future<bool> initialize() async {
     try {
+      // Check platform support - Android and iOS only
+      if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) {
+        _logger.e('❌ This package supports Android and iOS only');
+        _logger.e('❌ Current platform is not supported');
+        return false;
+      }
+      
       if (_isInitialized) {
         _logger.d('✅ Already initialized');
         return true;
@@ -104,6 +119,54 @@ class MusicFeatureAnalyzer {
       return results;
     } catch (e) {
       _logger.e('❌ Error analyzing songs: $e');
+      return [];
+    }
+  }
+
+  /// Extract metadata from a single audio file
+  /// Returns SongModel with all metadata fields populated (features will be null)
+  static Future<SongModel?> metadata(String filePath) async {
+    try {
+      _logger.i('📋 Extracting metadata from: $filePath');
+      
+      // Initialize metadata extractor if needed
+      await MetadataExtractor.initialize();
+      
+      // Extract metadata
+      final song = await MetadataExtractor.extractMetadata(filePath);
+      
+      if (song != null) {
+        _logger.i('✅ Metadata extracted successfully: ${song.title}');
+      } else {
+        _logger.w('⚠️ Failed to extract metadata from: $filePath');
+      }
+      
+      return song;
+    } catch (e, stackTrace) {
+      _logger.e('❌ Error extracting metadata: $e');
+      _logger.e('Stack trace: $stackTrace');
+      return null;
+    }
+  }
+
+  /// Extract metadata from multiple audio files
+  static Future<List<SongModel?>> extractMetadataBatch(List<String> filePaths) async {
+    try {
+      _logger.i('📋 Extracting metadata from ${filePaths.length} files');
+      
+      // Initialize metadata extractor if needed
+      await MetadataExtractor.initialize();
+      
+      final results = <SongModel?>[];
+      
+      for (final filePath in filePaths) {
+        final song = await MetadataExtractor.extractMetadata(filePath);
+        results.add(song);
+      }
+      
+      return results;
+    } catch (e) {
+      _logger.e('❌ Error extracting metadata batch: $e');
       return [];
     }
   }
@@ -223,6 +286,258 @@ class MusicFeatureAnalyzer {
 
   /// Check if analyzer is initialized
   static bool get isInitialized => _isInitialized;
+
+  /// Get permission instructions for the current platform
+  /// 
+  /// This method provides guidance on how to request permissions
+  /// required for metadata extraction. It returns platform-specific
+  /// instructions including code examples.
+  /// 
+  /// **Note:** This package does not include `permission_handler` as a dependency.
+  /// Users should add it to their app's pubspec.yaml and use the provided
+  /// code examples to request permissions.
+  /// 
+  /// Returns a map with permission instructions:
+  /// - `platform`: Platform name
+  /// - `permission`: Permission name
+  /// - `code`: Example code snippet
+  /// - `manifestRequired`: Whether manifest/plist changes are needed
+  /// - `manifestInstructions`: Manifest/plist configuration code
+  /// 
+  /// Example:
+  /// ```dart
+  /// final instructions = MusicFeatureAnalyzer.getPermissionInstructions();
+  /// print('Platform: ${instructions['platform']}');
+  /// print('Code: ${instructions['code']}');
+  /// ```
+  static Map<String, dynamic> getPermissionInstructions() {
+    _logger.i('📱 Getting permission instructions...');
+    return PermissionHelper.getPermissionInstructions();
+  }
+
+  /// Log permission instructions to console
+  /// 
+  /// Convenience method that logs detailed permission instructions
+  /// for the current platform, including code examples and manifest
+  /// configuration requirements.
+  static void logPermissionInstructions() {
+    PermissionHelper.logPermissionInstructions();
+  }
+
+  /// Verify platform setup for metadata extraction
+  /// 
+  /// Checks if the native method channel is properly configured.
+  /// This helps users identify setup issues early.
+  /// 
+  /// Returns a map with setup status information:
+  /// - `isConfigured`: Whether setup is complete
+  /// - `platform`: Current platform
+  /// - `issues`: List of identified issues
+  /// - `suggestions`: List of fix suggestions
+  /// - `message`: Summary message
+  /// - `setupGuide`: Link to setup documentation
+  /// 
+  /// Example:
+  /// ```dart
+  /// final status = await MusicFeatureAnalyzer.verifyPlatformSetup();
+  /// if (!status['isConfigured']) {
+  ///   print('Issues: ${status['issues']}');
+  ///   print('Suggestions: ${status['suggestions']}');
+  /// }
+  /// ```
+  static Future<Map<String, dynamic>> verifyPlatformSetup() async {
+    _logger.i('🔍 Verifying platform setup...');
+    
+    final isWeb = kIsWeb;
+    final isAndroid = !isWeb && Platform.isAndroid;
+    final isIOS = !isWeb && Platform.isIOS;
+    final isDesktop = !isWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+    
+    final status = <String, dynamic>{
+      'isConfigured': false,
+      'platform': defaultTargetPlatform.toString(),
+      'platformName': _getPlatformName(),
+      'issues': <String>[],
+      'suggestions': <String>[],
+      'setupGuide': 'See PLATFORM_SETUP_GUIDE.md for complete setup instructions',
+    };
+    
+    // This package supports Android and iOS only
+    if (isWeb) {
+      status['isConfigured'] = false;
+      status['message'] = '❌ Web platform is not supported';
+      status['issues'].add('This package supports Android and iOS only');
+      status['issues'].add('Web platform does not support native metadata extraction');
+      status['issues'].add('Web platform does not support AI feature extraction');
+      status['suggestions'].add('This package is designed for mobile platforms (Android/iOS) only');
+      status['suggestions'].add('For web applications, consider server-side processing');
+      status['nativeCode'] = 'Not supported - Android/iOS only';
+      return status;
+    }
+    
+    if (isDesktop) {
+      status['isConfigured'] = false;
+      status['message'] = '❌ Desktop platforms are not supported';
+      status['issues'].add('This package supports Android and iOS only');
+      status['issues'].add('Desktop platforms (Windows/Linux/macOS) are not supported');
+      status['issues'].add('Native metadata extraction requires Android MediaMetadataRetriever or iOS AVFoundation');
+      status['issues'].add('AI feature extraction requires mobile-optimized TensorFlow Lite');
+      status['suggestions'].add('This package is designed for mobile platforms (Android/iOS) only');
+      status['suggestions'].add('For desktop applications, consider alternative solutions');
+      status['nativeCode'] = 'Not supported - Android/iOS only';
+      return status;
+    }
+    
+    // Ensure we're on Android or iOS
+    if (!isAndroid && !isIOS) {
+      status['isConfigured'] = false;
+      status['message'] = '❌ Unsupported platform';
+      status['issues'].add('This package supports Android and iOS only');
+      status['suggestions'].add('Please use this package on Android or iOS platforms');
+      status['nativeCode'] = 'Not supported - Android/iOS only';
+      return status;
+    }
+
+    try {
+      // Try to call a simple method to check if channel is registered
+      final testResult = await _testMethodChannel();
+      
+      if (testResult) {
+        status['isConfigured'] = true;
+        status['message'] = '✅ Platform setup verified successfully';
+        status['nativeCode'] = 'Registered';
+        _logger.i('✅ Platform setup verified - native code is registered');
+      } else {
+        status['issues'].add('Method channel not registered');
+        status['issues'].add('Native code handler missing in MainActivity.kt (Android) or AppDelegate.swift (iOS)');
+        status['suggestions'].add(
+          'Add method channel handler to your MainActivity.kt (Android) or AppDelegate.swift (iOS)',
+        );
+        status['suggestions'].add('Copy code from PLATFORM_SETUP_GUIDE.md or example project');
+        status['suggestions'].add('Ensure method channel name is exactly: com.music_feature_analyzer/audio_metadata');
+        status['message'] = '⚠️ Platform setup incomplete - native code not registered';
+        status['nativeCode'] = 'Not registered';
+        _logger.w('⚠️ Platform setup incomplete - method channel not registered');
+        _logger.w('See PLATFORM_SETUP_GUIDE.md for setup instructions');
+      }
+    } on PlatformException catch (e) {
+      if (e.code == 'not_implemented') {
+        status['issues'].add('Method channel handler not implemented');
+        status['suggestions'].add('Add method channel handler to MainActivity.kt (Android) or AppDelegate.swift (iOS)');
+        status['suggestions'].add('See PLATFORM_SETUP_GUIDE.md for code examples');
+        status['message'] = '❌ Method channel not implemented';
+        status['nativeCode'] = 'Not implemented';
+      } else {
+        status['issues'].add('Error verifying setup: ${e.message}');
+        status['suggestions'].add('Check PLATFORM_SETUP_GUIDE.md for setup instructions');
+        status['message'] = '❌ Error verifying platform setup';
+      }
+      _logger.e('Error verifying setup: ${e.message}');
+    } catch (e) {
+      status['issues'].add('Unexpected error: $e');
+      status['suggestions'].add('Check PLATFORM_SETUP_GUIDE.md for setup instructions');
+      status['message'] = '❌ Error verifying platform setup';
+      _logger.e('Unexpected error verifying setup: $e');
+    }
+
+    return status;
+  }
+  
+  /// Verify method channel connection and detect dependency loading mode
+  /// 
+  /// This method checks:
+  /// - If the method channel is connected
+  /// - How the dependency is loaded (published package vs local path)
+  /// - Connection status and handler configuration
+  /// 
+  /// Returns a map with:
+  /// - `connected`: bool - Whether the method channel is connected
+  /// - `channelName`: String - The method channel name
+  /// - `loadingMode`: String - "PUBLISHED_PACKAGE" or "LOCAL_PATH"
+  /// - `handlerSet`: bool - Whether the handler is set
+  /// - `message`: String - Human-readable status message
+  /// 
+  /// Example:
+  /// ```dart
+  /// final connection = await MusicFeatureAnalyzer.verifyConnection();
+  /// print('Connected: ${connection['connected']}');
+  /// print('Loading Mode: ${connection['loadingMode']}');
+  /// ```
+  static Future<Map<String, dynamic>> verifyConnection() async {
+    _logger.i('🔍 Verifying method channel connection...');
+    
+    final result = await NativeMetadataService.verifyConnection();
+    
+    if (result == null) {
+      return {
+        'connected': false,
+        'message': '❌ Connection verification failed - no response from native code',
+        'channelName': 'com.music_feature_analyzer/audio_metadata',
+        'loadingMode': 'unknown',
+        'handlerSet': false,
+      };
+    }
+    
+    final connected = result['connected'] as bool? ?? false;
+    final channelName = result['channelName'] as String? ?? 'com.music_feature_analyzer/audio_metadata';
+    final loadingMode = result['loadingMode'] as String? ?? 'unknown';
+    final handlerSet = result['handlerSet'] as bool? ?? false;
+    
+    String message;
+    if (connected) {
+      if (loadingMode == NativeMetadataService.loadingModePublished) {
+        message = '✅ Connected (Published Package) - Automatic registration working';
+      } else if (loadingMode == NativeMetadataService.loadingModeLocal) {
+        message = '✅ Connected (Local Path) - Manual registration may be needed';
+      } else {
+        message = '✅ Connected - Loading mode: $loadingMode';
+      }
+    } else {
+      message = '❌ Not connected - Plugin may not be registered';
+      if (result.containsKey('error')) {
+        message += '\nError: ${result['error']}';
+      }
+    }
+    
+    return {
+      'connected': connected,
+      'channelName': channelName,
+      'loadingMode': loadingMode,
+      'handlerSet': handlerSet,
+      'message': message,
+      ...result,
+    };
+  }
+  
+  /// Get human-readable platform name
+  /// This package supports Android and iOS only
+  static String _getPlatformName() {
+    if (kIsWeb) return 'Web (Not Supported)';
+    if (Platform.isAndroid) return 'Android';
+    if (Platform.isIOS) return 'iOS';
+    if (Platform.isMacOS) return 'macOS (Not Supported)';
+    if (Platform.isWindows) return 'Windows (Not Supported)';
+    if (Platform.isLinux) return 'Linux (Not Supported)';
+    return 'Unknown (Not Supported)';
+  }
+
+  /// Test if method channel is properly set up
+  static Future<bool> _testMethodChannel() async {
+    try {
+      // Try a simple call - if it throws not_implemented, channel isn't set up
+      final testChannel = const MethodChannel('com.music_feature_analyzer/audio_metadata');
+      await testChannel.invokeMethod('getMetadata', {'path': '/test'});
+      return true;
+    } on PlatformException catch (e) {
+      if (e.code == 'not_implemented') {
+        return false; // Channel not set up
+      }
+      // Other errors (like file not found) mean channel exists
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   /// Dispose resources
   static Future<void> dispose() async {
