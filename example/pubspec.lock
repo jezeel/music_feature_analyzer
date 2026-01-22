@@ -294,7 +294,7 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "1.0.1-beta-01"
+    version: "1.0.1-beta-02"
   path:
     dependency: transitive
     description:

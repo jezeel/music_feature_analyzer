@@ -1,9 +1,11 @@
 package com.music_feature_analyzer
 
+import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import androidx.annotation.NonNull
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -15,69 +17,85 @@ class MusicFeatureAnalyzerPlugin : FlutterPlugin, MethodCallHandler {
     private lateinit var channel: MethodChannel
     private val handler = Handler(Looper.getMainLooper())
     private val TAG = "MusicFeatureAnalyzer"
-    
+    private var applicationContext: Context? = null
+
+    // Fixed: Add comprehensive loading mode detection
     enum class LoadingMode {
         PUBLISHED_PACKAGE,
-        LOCAL_PATH
+        LOCAL_PATH,
+        UNKNOWN
     }
-    
+
     private fun detectLoadingMode(): LoadingMode {
         return try {
+            // Check if we're in development (app running from IDE)
+            val isDebuggable = (applicationContext?.applicationInfo?.flags ?: 0) and 
+                               android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+            
+            // Check code source location
             val codeSource = this::class.java.protectionDomain?.codeSource?.location
             val path = codeSource?.path ?: ""
-            val isPublished = path.endsWith(".jar", ignoreCase = true) || 
-                             path.contains(".gradle") ||
-                             path.contains("pub-cache") ||
-                             path.contains(".pub-cache")
             
-            if (isPublished) LoadingMode.PUBLISHED_PACKAGE else LoadingMode.LOCAL_PATH
+            Log.d(TAG, "Loading mode detection - Path: $path, Debuggable: $isDebuggable")
+            
+            // Check for published package indicators
+            val isPublished = path.contains(".gradle") ||
+                             path.contains("pub-cache") ||
+                             path.contains(".pub-cache") ||
+                             path.contains("/.pub-cache/") ||
+                             path.contains("/flutter/.pub-cache/")
+            
+            return if (isPublished) {
+                Log.i(TAG, "Loading mode: PUBLISHED_PACKAGE")
+                LoadingMode.PUBLISHED_PACKAGE
+            } else {
+                Log.i(TAG, "Loading mode: LOCAL_PATH or DEVELOPMENT")
+                LoadingMode.LOCAL_PATH
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Could not detect loading mode: ${e.message}")
-            LoadingMode.PUBLISHED_PACKAGE
+            LoadingMode.UNKNOWN
         }
     }
 
-    companion object {
-        @JvmStatic
-        fun registerWith(registrar: io.flutter.plugin.common.PluginRegistry.Registrar) {
-            val channel = MethodChannel(registrar.messenger(), "com.music_feature_analyzer/audio_metadata")
-            val instance = MusicFeatureAnalyzerPlugin()
-            channel.setMethodCallHandler(instance)
-            Log.i("MusicFeatureAnalyzer", "Plugin registered manually via registerWith()")
-        }
-    }
-
-    override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
+    override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         try {
-            val loadingMode = detectLoadingMode()
-            val channelName = "com.music_feature_analyzer/audio_metadata"
-            channel = MethodChannel(flutterPluginBinding.binaryMessenger, channelName)
+            applicationContext = flutterPluginBinding.applicationContext
+            
+            // Create method channel
+            channel = MethodChannel(
+                flutterPluginBinding.binaryMessenger,
+                "com.music_feature_analyzer/audio_metadata"
+            )
             channel.setMethodCallHandler(this)
             
-            when (loadingMode) {
-                LoadingMode.PUBLISHED_PACKAGE -> {
-                    Log.i(TAG, "Plugin attached (PUBLISHED PACKAGE) - automatic registration")
-                }
-                LoadingMode.LOCAL_PATH -> {
-                    Log.i(TAG, "Plugin attached (LOCAL PATH) - manual registration may be needed")
-                }
-            }
+            Log.i(TAG, "✅ MusicFeatureAnalyzerPlugin attached to engine")
+            Log.d(TAG, "Loading mode detected: ${detectLoadingMode()}")
         } catch (e: Exception) {
             Log.e(TAG, "Error attaching plugin: ${e.message}", e)
             throw e
         }
     }
 
-    override fun onMethodCall(call: MethodCall, result: Result) {
-        // onMethodCall is already called on the main thread, so synchronous responses don't need handler.post
+    override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
+        channel.setMethodCallHandler(null)
+        Log.i(TAG, "MusicFeatureAnalyzerPlugin detached from engine")
+    }
+
+    override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
+        // FIXED: Handle verifyConnection first
         if (call.method == "verifyConnection") {
             val loadingMode = detectLoadingMode()
-            result.success(mapOf(
+            val response = mapOf(
                 "connected" to true,
                 "channelName" to "com.music_feature_analyzer/audio_metadata",
                 "loadingMode" to loadingMode.name,
-                "handlerSet" to ::channel.isInitialized
-            ))
+                "handlerSet" to ::channel.isInitialized,
+                "platform" to "Android",
+                "pluginVersion" to "1.0.1-beta-02"
+            )
+            result.success(response)
+            Log.d(TAG, "verifyConnection response: $response")
             return
         }
         
@@ -91,14 +109,8 @@ class MusicFeatureAnalyzerPlugin : FlutterPlugin, MethodCallHandler {
             "getMetadata" -> getMetadata(path, result)
             "getAlbumArt" -> getAlbumArt(path, result)
             "getAlbumArtMimeType" -> getAlbumArtMimeType(path, result)
-            else -> {
-                result.notImplemented()
-            }
+            else -> result.notImplemented()
         }
-    }
-
-    override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        channel.setMethodCallHandler(null)
     }
 
     private fun getMetadata(filePath: String, result: Result) {

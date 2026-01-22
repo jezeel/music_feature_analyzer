@@ -8,7 +8,7 @@
 
 **Extract metadata and AI-powered features from audio files**
 
-> ⚠️ **Beta Version**: This is a beta release (`1.0.1-beta-01`) and may have issues. Not recommended for production use. Please wait for a stable version.
+> ⚠️ **Beta Version**: This is a beta release (`1.0.1-beta-02`) and may have issues. Not recommended for production use. Please wait for a stable version.
 
 [![GitHub stars](https://img.shields.io/github/stars/jezeel/music_feature_analyzer?style=social)](https://github.com/jezeel/music_feature_analyzer)
 
@@ -31,7 +31,7 @@
 
 ```yaml
 dependencies:
-  music_feature_analyzer: ^1.0.1-beta-01
+  music_feature_analyzer: ^1.0.1-beta-02
 ```
 
 ```bash
@@ -208,6 +208,7 @@ MP3, WAV, FLAC, AAC, M4A, OGG, WMA, OPUS, AIFF, ALAC
 
 - **[Build Compatibility](BUILD_COMPATIBILITY.md)** - Local path dependency setup
 - **[Changelog](CHANGELOG.md)** - Version history
+- **[Dependency Adding Locally](DEPENDENCY_ADDING_LOCALLY.md)** 
 
 ---
 

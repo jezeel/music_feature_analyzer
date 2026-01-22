@@ -40,8 +40,8 @@ android {
 }
 
 dependencies {
-    // Add the plugin as a direct dependency for local path dependencies
-    // This ensures the plugin classes are available at compile time
+    // Plugin dependencies are automatically handled by Flutter's plugin system
+    // when using published package from pub.dev
     implementation(project(":music_feature_analyzer"))
 }
 

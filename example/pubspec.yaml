@@ -1,33 +1,31 @@
 name: music_feature_analyzer_example
 description: A comprehensive example demonstrating all features of the music_feature_analyzer package
 version: 1.0.0+1
-publish_to: 'none'  # This is an example package, not for publishing
+publish_to: "none" # This is an example package, not for publishing
 
 environment:
-  sdk: '>=3.8.1 <4.0.0'
+  sdk: ">=3.8.1 <4.0.0"
   flutter: ">=3.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
-  
+
   # Music Feature Analyzer Package
-  # Using local package for development/testing (points to parent folder)
+  # Using published version from pub.dev
+  # music_feature_analyzer: ^1.0.1-beta-01
   music_feature_analyzer:
     path: ../
-  
-  # Uncomment below and comment above when using published version from pub.dev
-  # music_feature_analyzer: ^1.0.0
-  
+
   # UI Dependencies
   cupertino_icons: ^1.0.8
   flutter_screenutil: ^5.9.3
   google_fonts: ^6.2.1
   logger: ^2.4.0
-  
+
   # File Picker
   file_picker: ^10.3.3
-  
+
   # Additional UI Dependencies
   lottie: ^3.1.2
   shimmer: ^3.0.0
@@ -39,4 +37,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  

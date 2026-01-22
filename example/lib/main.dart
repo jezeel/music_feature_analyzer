@@ -7,24 +7,31 @@ import 'utils/app_logger.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   final logger = AppLogger('Main');
   logger.i('🎵 Music Feature Analyzer Example starting...');
 
-  // Initialize Music Feature Analyzer (same as your main project)
   try {
     logger.i('🚀 Initializing Music Feature Analyzer...');
     final analyzerInitialized = await MusicFeatureAnalyzer.initialize();
+
     if (analyzerInitialized) {
       logger.i('✅ Music Feature Analyzer initialized successfully');
+
+      // 🔍 OPTIONAL: Native plugin verification (TEMPORARY)
+      try {
+        final status = await MusicFeatureAnalyzer.verifyConnection();
+        logger.i('🔌 Native plugin status: $status');
+      } catch (e) {
+        logger.e('❌ Native plugin verifyConnection failed: $e');
+      }
     } else {
-      logger.w('⚠️ Music Feature Analyzer initialization failed - will retry later');
+      logger.w('⚠️ Music Feature Analyzer initialization failed');
     }
   } catch (e) {
     logger.e('❌ Music Feature Analyzer initialization error: $e');
-    // Continue anyway - will retry in home screen if needed
   }
-  
+
   runApp(const MusicAnalyzerExampleApp());
 }
 

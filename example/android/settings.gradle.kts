@@ -25,7 +25,6 @@ plugins {
 
 include(":app")
 
-// Include the music_feature_analyzer plugin for local path dependencies
-// This ensures the plugin is available in the example app
+// Plugin is automatically included via Flutter's plugin system when using published package
 include(":music_feature_analyzer")
-project(":music_feature_analyzer").projectDir = File("../../android")
+project(":music_feature_analyzer").projectDir = file("../../android")

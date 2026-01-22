@@ -47,7 +47,7 @@
 	<true/>
 	
 	<!-- Music Feature Analyzer Permissions -->
-	<key>NSMusicUsageDescription</key>
+	<key>NSAppleMusicUsageDescription</key>
 	<string>This app needs access to your music library to analyze audio files and extract metadata.</string>
 	<key>NSMediaLibraryUsageDescription</key>
 	<string>This app needs access to your media library to extract metadata from audio files.</string>
