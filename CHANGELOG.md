@@ -2,42 +2,74 @@
 
 All notable changes to this project will be documented in this file.
 
+---
+
+## [1.0.1-beta-02] - 2026-01-22
+
+> ⚠️ **Beta Release**: Major native plugin improvements. Not recommended for production use.
+
+### Added
+- ✅ **Rewritten Native Plugins**: Android and iOS plugins rebuilt for better performance and stability
+- ✅ **iOS AVFoundation Integration**: Full metadata extraction using `AVAsset`
+- ✅ **Album Art MIME Detection**: Automatic detection of embedded artwork formats
+- ✅ **Improved Metadata Parsing**: Better handling of track/disc numbers and year/date formats
+- ✅ **Enhanced Platform Verification**: Extended `verifyConnection()` with platform details
+- ✅ **Graceful Error Recovery**: Safe handling of corrupted or incomplete audio files
+
+### Changed
+- 🔄 **Optimized Native Threading**: Improved background execution and main-thread safety
+- 🔄 **Better Resource Management**: Proper cleanup to avoid memory leaks
+- 🔄 **Improved Method Channel Stability**: Reduced overhead and more reliable communication
+
+### Fixed
+- 🐞 Android file size overflow issues
+- 🐞 Album art detection inconsistencies
+- 🐞 Metadata parsing edge cases
+- 🐞 Native concurrency and memory issues
+
+### Technical Notes
+- Method channel: `com.music_feature_analyzer/audio_metadata`
+- Flutter **3.0.0+**, Dart **3.8.1+**
+- Android **API 21+**, iOS **11.0+**
+
+---
+
 ## [1.0.1-beta-01] - 2026-01-21
 
 > ⚠️ **Beta Release**: This version may have issues. Not recommended for production use.
 
 ### Added
-- ✅ **Automatic Native Code Registration**: Native code now registers automatically via Flutter plugin system
-- ✅ **Metadata Extraction**: New `metadata()` and `extractMetadataBatch()` methods for extracting audio metadata
-- ✅ **Comprehensive Metadata**: Extracts title, artist, album, album art, genre, year, track number, disc number, bitrate, file size, and more
-- ✅ **Permission Helper**: `getPermissionInstructions()` and `logPermissionInstructions()` for platform-specific guidance
-- ✅ **Setup Verification**: `verifyPlatformSetup()` to check if native code is properly configured
-- ✅ **Platform-Specific Guides**: Android and iOS integration guides with automatic registration support
+- ✅ **Automatic Native Code Registration** via Flutter plugin system
+- ✅ **Metadata Extraction APIs**: `metadata()` and `extractMetadataBatch()`
+- ✅ **Comprehensive Audio Metadata**: Title, artist, album, album art, genre, year, track/disc number, bitrate, file size, and more
+- ✅ **Permission Helpers**: Platform-specific permission guidance utilities
+- ✅ **Setup Verification**: `verifyPlatformSetup()` to validate native configuration
+- ✅ **Platform Guides**: Android and iOS integration documentation
 
 ### Changed
-- ✅ **Simplified Setup**: No manual MainActivity.kt or AppDelegate.swift changes needed
-- ✅ **Better Error Messages**: Enhanced error handling with setup guidance
-- ✅ **Documentation**: Updated all guides to reflect automatic registration
+- 🔄 **Simplified Setup**: No manual `MainActivity.kt` or `AppDelegate.swift` changes required
+- 🔄 **Improved Error Messages**: Clearer setup and runtime guidance
+- 🔄 **Documentation Updates**: All guides updated for automatic registration
 
-### Technical Details
-- Flutter plugin structure with automatic registration
-- Android plugin implements `FlutterPlugin` interface
-- iOS plugin implements `FlutterPlugin` protocol
-- Method channel: `com.music_feature_analyzer/audio_metadata`
-- Thread-safe operations on both platforms
+### Technical Notes
+- Flutter plugin-based architecture
+- Android plugin implements `FlutterPlugin`
+- iOS plugin implements `FlutterPlugin`
+- Thread-safe native operations
 - File size overflow protection
-- Optimized method channel handling (removed unnecessary thread switching)
-- Clean code with removed verbose logging
+- Optimized method channel handling
+- Reduced verbose native logging
+
+---
 
 ## [1.0.0] - 2025-10-01
 
 ### Added
-- Initial release of Music Feature Analyzer package
-- YAMNet AI model integration for instrument detection, genre classification, and mood analysis
-- Advanced signal processing for tempo detection, energy analysis, and spectral features
-- Comprehensive feature extraction with 20+ musical features
-- Cross-platform support for iOS and Android
-- Batch processing capabilities with progress callbacks
-- Full test coverage
-- Modern Flutter architecture with Freezed data classes
-- JSON serialization support
+- 🎉 Initial release of **Music Feature Analyzer**
+- 🎵 YAMNet AI integration for genre, mood, and instrument detection
+- 🎚 Advanced signal processing for tempo, energy, and spectral features
+- 📊 20+ extracted musical features
+- 📦 Batch processing with progress callbacks
+- 📱 Cross-platform support for Android and iOS
+- 🧩 Freezed-based data models
+- 🔄 JSON serialization support
