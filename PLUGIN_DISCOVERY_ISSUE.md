@@ -2,7 +2,7 @@
 
 ## Problem
 Flutter is not discovering `music_feature_analyzer` as a plugin, even though:
-- ✅ Package is published to pub.dev (1.0.1-beta-05)
+- ✅ Package is published to pub.dev (1.0.1-beta-06)
 - ✅ `pubspec.yaml` has correct `plugin:` section
 - ✅ Android plugin class exists: `MusicFeatureAnalyzerPlugin.kt`
 - ✅ iOS plugin class exists: `MusicFeatureAnalyzerPlugin.swift`

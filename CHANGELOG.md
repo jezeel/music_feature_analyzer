@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [1.0.1-beta-06] - 2026-01-23
+
+> ⚠️ **Beta Release**: Plugin discovery configuration fix. Not recommended for production use.
+
+### Changed
+- 🔄 **Plugin Configuration**: Enabled `default_package: music_feature_analyzer` in Android plugin configuration to improve plugin discovery
+- 🔄 **Plugin Discovery**: This should help Flutter's plugin discovery mechanism find the plugin automatically
+
+### Fixed
+- 🐛 **Plugin Discovery**: Fixed potential plugin discovery issues by explicitly setting default_package
+
+### Technical Notes
+- Method channel: `com.music_feature_analyzer/audio_metadata`
+- Flutter **3.0.0+**, Dart **3.8.1+**
+- Android **API 21+**, iOS **12.0+**
+
+---
+
 ## [1.0.1-beta-05] - 2026-01-23
 
 > ⚠️ **Beta Release**: Android plugin structure improvements and code quality enhancements. Not recommended for production use.

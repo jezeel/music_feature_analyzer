@@ -292,10 +292,10 @@ packages:
     dependency: "direct main"
     description:
       name: music_feature_analyzer
-      sha256: "8dd5619cd6859f41e6cbd2ef0be7010debaefd186cf9ba1a8a3767bccc63ec38"
+      sha256: d800e82341f3603a5190554883541a8938653960750bd7bcc6aa97e590f61c0f
       url: "https://pub.dev"
     source: hosted
-    version: "1.0.1-beta-04"
+    version: "1.0.1-beta-05"
   path:
     dependency: transitive
     description:
