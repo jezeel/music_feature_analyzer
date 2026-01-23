@@ -1,13 +1,9 @@
 package com.example.music_feature_analyzer_example
 
 import io.flutter.embedding.android.FlutterActivity
-import io.flutter.embedding.engine.FlutterEngine
-import com.music_feature_analyzer.MusicFeatureAnalyzerPlugin
 
 class MainActivity: FlutterActivity() {
-    
-    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
-        super.configureFlutterEngine(flutterEngine)
-        flutterEngine.plugins.add(MusicFeatureAnalyzerPlugin())
-    }
+    // Plugin registration is handled automatically by Flutter's plugin system
+    // If automatic registration fails, the plugin may need to be manually registered
+    // See BUILD_COMPATIBILITY.md for manual registration instructions
 }

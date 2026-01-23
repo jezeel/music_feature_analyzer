@@ -14,7 +14,7 @@ dependencies:
   # Music Feature Analyzer Package:
 
   # To use the published version of the plugin, uncomment the following line:
-  music_feature_analyzer: ^1.0.1-beta-02
+  music_feature_analyzer: ^1.0.1-beta-03
 
   # To use the local version of the plugin, uncomment the following lines:
   # music_feature_analyzer:

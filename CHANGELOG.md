@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [1.0.1-beta-04] - 2026-01-23
+
+> ⚠️ **Beta Release**: Code quality improvements and import cleanup. Not recommended for production use.
+
+### Fixed
+- 🐛 **Code Quality**: Removed unnecessary imports in feature extractor and metadata service
+- 🐛 **Test Imports**: Cleaned up redundant imports in test files
+- ✅ **Lint Compliance**: All lib and test files now pass Flutter analyze with no issues
+
+### Technical Notes
+- Method channel: `com.music_feature_analyzer/audio_metadata`
+- Flutter **3.0.0+**, Dart **3.8.1+**
+- Android **API 21+**, iOS **12.0+**
+
+---
+
 ## [1.0.1-beta-03] - 2026-01-23
 
 > ⚠️ **Beta Release**: Documentation and error message improvements. Not recommended for production use.

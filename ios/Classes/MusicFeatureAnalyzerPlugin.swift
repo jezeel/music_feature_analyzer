@@ -27,7 +27,7 @@ public class MusicFeatureAnalyzerPlugin: NSObject, FlutterPlugin {
                 "loadingMode": "IOS_PLATFORM",
                 "handlerSet": channel != nil,
                 "platform": "iOS",
-                "pluginVersion": "1.0.1-beta-03"
+                "pluginVersion": "1.0.1-beta-04"
             ]
             result(response)
             print("verifyConnection response: \(response)")

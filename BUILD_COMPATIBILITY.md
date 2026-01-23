@@ -2,7 +2,7 @@
 
 This document explains how `music_feature_analyzer` works in different usage scenarios.
 
-## ✅ Published Package (pub.dev) - `music_feature_analyzer: ^1.0.1-beta-03`
+## ✅ Published Package (pub.dev) - `music_feature_analyzer: ^1.0.1-beta-04`
 
 > ⚠️ **Beta Version**: This is a beta release and may have issues. Not recommended for production use.
 
@@ -13,7 +13,7 @@ When using the published package from pub.dev, **everything works automatically*
 1. **Add to `pubspec.yaml`:**
    ```yaml
    dependencies:
-     music_feature_analyzer: ^1.0.1-beta-03
+     music_feature_analyzer: ^1.0.1-beta-04
    ```
 
 2. **Run:**

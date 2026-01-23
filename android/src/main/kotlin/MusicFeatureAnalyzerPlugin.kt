@@ -92,7 +92,7 @@ class MusicFeatureAnalyzerPlugin : FlutterPlugin, MethodCallHandler {
                 "loadingMode" to loadingMode.name,
                 "handlerSet" to ::channel.isInitialized,
                 "platform" to "Android",
-                "pluginVersion" to "1.0.1-beta-03"
+                "pluginVersion" to "1.0.1-beta-04"
             )
             result.success(response)
             Log.d(TAG, "verifyConnection response: $response")
