@@ -8,7 +8,7 @@
 
 **Extract metadata and AI-powered features from audio files**
 
-> ⚠️ **Beta Version**: This is a beta release (`1.0.1-beta-04`) and may have issues. Not recommended for production use. Please wait for a stable version.
+> ⚠️ **Beta Version**: This is a beta release (`1.0.1-beta-05`) and may have issues. Not recommended for production use. Please wait for a stable version.
 
 [![GitHub stars](https://img.shields.io/github/stars/jezeel/music_feature_analyzer?style=social)](https://github.com/jezeel/music_feature_analyzer)
 
@@ -33,7 +33,7 @@
 
 ```yaml
 dependencies:
-  music_feature_analyzer: ^1.0.1-beta-04
+  music_feature_analyzer: ^1.0.1-beta-05
 ```
 
 ```bash

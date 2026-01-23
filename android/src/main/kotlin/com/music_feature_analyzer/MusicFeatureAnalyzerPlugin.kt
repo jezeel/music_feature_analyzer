@@ -13,6 +13,8 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import java.io.File
 
+
+@Suppress("unused")
 class MusicFeatureAnalyzerPlugin : FlutterPlugin, MethodCallHandler {
     private lateinit var channel: MethodChannel
     private val handler = Handler(Looper.getMainLooper())
@@ -92,7 +94,7 @@ class MusicFeatureAnalyzerPlugin : FlutterPlugin, MethodCallHandler {
                 "loadingMode" to loadingMode.name,
                 "handlerSet" to ::channel.isInitialized,
                 "platform" to "Android",
-                "pluginVersion" to "1.0.1-beta-04"
+                "pluginVersion" to "1.0.1-beta-05"
             )
             result.success(response)
             Log.d(TAG, "verifyConnection response: $response")

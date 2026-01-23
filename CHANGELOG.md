@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [1.0.1-beta-05] - 2026-01-23
+
+> ⚠️ **Beta Release**: Android plugin structure improvements and code quality enhancements. Not recommended for production use.
+
+### Changed
+- 🔄 **Android Plugin Structure**: Moved plugin file to proper package structure (`com/music_feature_analyzer/`)
+- 🔄 **Package Declaration**: Added proper package declaration for better plugin discovery
+- 🔄 **Code Quality**: Added `@Suppress("unused")` annotation to prevent false warnings
+- 🔄 **Loading Mode Detection**: Enhanced loading mode detection with comprehensive path checking
+- 🔄 **Example App**: Cleaned up MainActivity.kt (removed manual registration workaround)
+
+### Fixed
+- 🐛 **Plugin Discovery**: Fixed plugin file location to match package structure
+- 🐛 **Code Organization**: Removed duplicate plugin file from incorrect location
+
+### Technical Notes
+- Method channel: `com.music_feature_analyzer/audio_metadata`
+- Flutter **3.0.0+**, Dart **3.8.1+**
+- Android **API 21+**, iOS **12.0+**
+
+---
+
 ## [1.0.1-beta-04] - 2026-01-23
 
 > ⚠️ **Beta Release**: Code quality improvements and import cleanup. Not recommended for production use.

@@ -4,7 +4,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'music_feature_analyzer'
-  s.version          = '1.0.1-beta-04'
+  s.version          = '1.0.1-beta-05'
   s.summary          = 'A comprehensive music feature analysis package using YAMNet AI and signal processing'
   s.description      = <<-DESC
 A Flutter plugin for extracting audio metadata and features from music files.
