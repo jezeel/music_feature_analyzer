@@ -11,11 +11,14 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # Music Feature Analyzer Package
-  # Using published version from pub.dev
-  # music_feature_analyzer: ^1.0.1-beta-01
-  music_feature_analyzer:
-    path: ../
+  # Music Feature Analyzer Package:
+
+  # To use the published version of the plugin, uncomment the following line:
+  music_feature_analyzer: ^1.0.1-beta-02
+
+  # To use the local version of the plugin, uncomment the following lines:
+  # music_feature_analyzer:
+  #   path: ../
 
   # UI Dependencies
   cupertino_icons: ^1.0.8

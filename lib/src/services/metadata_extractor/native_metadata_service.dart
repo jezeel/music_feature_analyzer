@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import '../../utils/app_logger.dart';
 
@@ -125,14 +124,15 @@ class NativeMetadataService {
           e.message?.contains('MissingPluginException') == true) {
         _logger.e('⚠️ Plugin not registered!');
         _logger.w('═══════════════════════════════════════════════════════════════');
-        _logger.w('⚠️  PLUGIN REGISTRATION REQUIRED');
+        _logger.w('⚠️  PLUGIN REGISTRATION ISSUE');
         _logger.w('═══════════════════════════════════════════════════════════════');
-        _logger.i('SOLUTION 1 (Published Package):');
+        _logger.i('SOLUTION 1 (Published Package from pub.dev):');
+        _logger.i('  Plugin should auto-register. Try:');
         _logger.i('  1. Run: flutter clean');
         _logger.i('  2. Run: flutter pub get');
-        _logger.i('  3. Rebuild your app');
-        _logger.i('SOLUTION 2 (Local Path):');
-        _logger.i('  Add manual registration in MainActivity.kt');
+        _logger.i('  3. Rebuild your app completely');
+        _logger.i('SOLUTION 2 (Local Path Dependency):');
+        _logger.i('  Manual registration may be needed');
         _logger.i('  See BUILD_COMPATIBILITY.md for details');
         _logger.w('═══════════════════════════════════════════════════════════════');
       }
@@ -198,37 +198,32 @@ class NativeMetadataService {
           e.message?.contains('MissingPluginException') == true) {
         _logger.e('Plugin not registered! Attempting to provide setup instructions...');
         _logger.w('═══════════════════════════════════════════════════════════════');
-        _logger.w('⚠️  PLUGIN REGISTRATION REQUIRED');
+        _logger.w('⚠️  PLUGIN REGISTRATION ISSUE');
         _logger.w('═══════════════════════════════════════════════════════════════');
         _logger.w('The MusicFeatureAnalyzerPlugin is not registered.');
-        _logger.i('SOLUTION 1 (Recommended): Automatic Registration');
+        _logger.i('SOLUTION 1 (Published Package from pub.dev):');
+        _logger.i('  The plugin should register automatically. Try:');
         _logger.i('  1. Run: flutter clean');
         _logger.i('  2. Run: flutter pub get');
-        _logger.i('  3. Rebuild your app');
-        _logger.i('  4. Check GeneratedPluginRegistrant.java for the plugin');
-        _logger.i('SOLUTION 2: Manual Registration');
-        _logger.i('  Add to your MainActivity.kt:');
-        _logger.i('  override fun configureFlutterEngine(flutterEngine: FlutterEngine) {');
-        _logger.i('      super.configureFlutterEngine(flutterEngine)');
-        _logger.i('      flutterEngine.plugins.add(MusicFeatureAnalyzerPlugin())');
-        _logger.i('  }');
-        _logger.i('See BUILD_COMPATIBILITY.md for complete instructions.');
+        _logger.i('  3. Rebuild your app completely');
+        _logger.i('  4. Verify GeneratedPluginRegistrant includes the plugin');
+        _logger.i('SOLUTION 2 (Local Path Dependency):');
+        _logger.i('  Manual registration may be needed. See BUILD_COMPATIBILITY.md');
         _logger.w('═══════════════════════════════════════════════════════════════');
         
         throw PlatformException(
           code: 'PLUGIN_NOT_REGISTERED',
           message: 'MusicFeatureAnalyzerPlugin is not registered.\n\n'
-              'SOLUTION 1: Try automatic registration:\n'
+              'For published packages (pub.dev), try:\n'
               '  1. Run: flutter clean\n'
               '  2. Run: flutter pub get\n'
               '  3. Rebuild your app\n\n'
-              'SOLUTION 2: Manual registration in MainActivity.kt:\n'
-              '  See BUILD_COMPATIBILITY.md for code\n\n'
+              'For local path dependencies, see BUILD_COMPATIBILITY.md\n\n'
               'Method channel: com.music_feature_analyzer/audio_metadata',
           details: {
             'methodChannel': 'com.music_feature_analyzer/audio_metadata',
             'setupGuide': 'BUILD_COMPATIBILITY.md',
-            'androidExample': 'example/android/app/src/main/kotlin/.../MainActivity.kt',
+            'isPublishedPackage': 'Check if using pub.dev or local path',
           },
         );
       }

@@ -45,7 +45,7 @@ This example demonstrates how to integrate the `music_feature_analyzer` package 
 ### 1. **Add to pubspec.yaml**
 ```yaml
 dependencies:
-  music_feature_analyzer: ^1.0.1-beta-01
+  music_feature_analyzer: ^1.0.1-beta-03
 ```
 
 ### 2. **Initialize the Package**

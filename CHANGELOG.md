@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [1.0.1-beta-03] - 2026-01-23
+
+> ⚠️ **Beta Release**: Documentation and error message improvements. Not recommended for production use.
+
+### Changed
+- 🔄 **Improved Documentation**: Clarified zero-configuration setup for published packages
+- 🔄 **Better Error Messages**: More accurate troubleshooting guidance distinguishing published vs local packages
+- 🔄 **README Updates**: Explicitly states no platform-specific configuration needed for pub.dev packages
+
+### Fixed
+- 📝 **Documentation Clarity**: Removed confusion about manual registration requirements
+- 📝 **Permission Documentation**: Clarified that permissions are optional (only needed for media library access)
+
+### Technical Notes
+- Method channel: `com.music_feature_analyzer/audio_metadata`
+- Flutter **3.0.0+**, Dart **3.8.1+**
+- Android **API 21+**, iOS **11.0+**
+
+---
+
 ## [1.0.1-beta-02] - 2026-01-22
 
 > ⚠️ **Beta Release**: Major native plugin improvements. Not recommended for production use.

@@ -8,7 +8,7 @@
 
 **Extract metadata and AI-powered features from audio files**
 
-> ⚠️ **Beta Version**: This is a beta release (`1.0.1-beta-02`) and may have issues. Not recommended for production use. Please wait for a stable version.
+> ⚠️ **Beta Version**: This is a beta release (`1.0.1-beta-03`) and may have issues. Not recommended for production use. Please wait for a stable version.
 
 [![GitHub stars](https://img.shields.io/github/stars/jezeel/music_feature_analyzer?style=social)](https://github.com/jezeel/music_feature_analyzer)
 
@@ -29,16 +29,20 @@
 
 ### Installation
 
+**✅ Zero Configuration Required!** When using the published package from pub.dev, no platform-specific setup is needed. Just add it to your `pubspec.yaml`:
+
 ```yaml
 dependencies:
-  music_feature_analyzer: ^1.0.1-beta-02
+  music_feature_analyzer: ^1.0.1-beta-03
 ```
 
 ```bash
 flutter pub get
 ```
 
-> **Note**: For local path dependencies, see [BUILD_COMPATIBILITY.md](BUILD_COMPATIBILITY.md)
+The plugin automatically registers itself - no manual `MainActivity.kt` or `AppDelegate.swift` changes needed!
+
+> **Note**: For local path dependencies (development), see [BUILD_COMPATIBILITY.md](BUILD_COMPATIBILITY.md)
 
 ### Basic Usage
 
@@ -151,9 +155,17 @@ await MusicFeatureAnalyzer.dispose();
 
 ## ⚙️ Platform Setup
 
-### Android
+### ✅ Automatic Registration
 
-**Add to `android/app/src/main/AndroidManifest.xml`:**
+**For published packages (pub.dev):** No setup required! The plugin automatically registers itself via Flutter's plugin system. Just add the package and use it.
+
+### 📱 Permissions (Optional)
+
+Permissions are **only required** if you need to access files from the device's media library. If you're providing file paths directly (e.g., from file picker), permissions are not needed.
+
+#### Android
+
+**If accessing media library, add to `android/app/src/main/AndroidManifest.xml`:**
 
 ```xml
 <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
@@ -161,7 +173,7 @@ await MusicFeatureAnalyzer.dispose();
                  android:maxSdkVersion="32" />
 ```
 
-**Request permissions:**
+**Request permissions at runtime:**
 
 ```dart
 import 'package:permission_handler/permission_handler.dart';
@@ -169,9 +181,9 @@ await Permission.audio.request(); // Android 13+
 await Permission.storage.request(); // Android 12-
 ```
 
-### iOS
+#### iOS
 
-**Add to `ios/Runner/Info.plist`:**
+**If accessing media library, add to `ios/Runner/Info.plist`:**
 
 ```xml
 <key>NSAppleMusicUsageDescription</key>
@@ -180,7 +192,7 @@ await Permission.storage.request(); // Android 12-
 <string>This app needs access to your media library.</string>
 ```
 
-**Request permissions:**
+**Request permissions at runtime:**
 
 ```dart
 import 'package:permission_handler/permission_handler.dart';
@@ -207,8 +219,7 @@ MP3, WAV, FLAC, AAC, M4A, OGG, WMA, OPUS, AIFF, ALAC
 ## 📚 Documentation
 
 - **[Build Compatibility](BUILD_COMPATIBILITY.md)** - Local path dependency setup
-- **[Changelog](CHANGELOG.md)** - Version history
-- **[Dependency Adding Locally](DEPENDENCY_ADDING_LOCALLY.md)** 
+- **[Changelog](CHANGELOG.md)** - Version history 
 
 ---
 

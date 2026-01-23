@@ -1,7 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_feature_analyzer/music_feature_analyzer.dart';
-import 'package:music_feature_analyzer/src/models/extracted_song_features.dart';
-import 'package:music_feature_analyzer/src/models/song_model.dart';
 
 /// Main test suite for Music Feature Analyzer package
 /// 

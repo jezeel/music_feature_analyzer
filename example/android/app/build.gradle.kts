@@ -42,7 +42,9 @@ android {
 dependencies {
     // Plugin dependencies are automatically handled by Flutter's plugin system
     // when using published package from pub.dev
-    implementation(project(":music_feature_analyzer"))
+    
+    /// To use the local version of the plugin, uncomment the following line:
+    // implementation project(':music_feature_analyzer')
 }
 
 flutter {

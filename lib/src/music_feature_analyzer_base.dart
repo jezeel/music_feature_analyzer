@@ -409,12 +409,12 @@ class MusicFeatureAnalyzer {
         _logger.i('✅ Platform setup verified - native code is registered');
       } else {
         status['issues'].add('Method channel not registered');
-        status['issues'].add('Native code handler missing in MainActivity.kt (Android) or AppDelegate.swift (iOS)');
+        status['issues'].add('Plugin may not be registered automatically');
         status['suggestions'].add(
-          'Add method channel handler to your MainActivity.kt (Android) or AppDelegate.swift (iOS)',
+          'For published packages: Run flutter clean && flutter pub get && rebuild',
         );
-        status['suggestions'].add('Copy code from PLATFORM_SETUP_GUIDE.md or example project');
-        status['suggestions'].add('Ensure method channel name is exactly: com.music_feature_analyzer/audio_metadata');
+        status['suggestions'].add('For local path dependencies: See BUILD_COMPATIBILITY.md');
+        status['suggestions'].add('Verify GeneratedPluginRegistrant includes the plugin');
         status['message'] = '⚠️ Platform setup incomplete - native code not registered';
         status['nativeCode'] = 'Not registered';
         _logger.w('⚠️ Platform setup incomplete - method channel not registered');
@@ -423,8 +423,8 @@ class MusicFeatureAnalyzer {
     } on PlatformException catch (e) {
       if (e.code == 'not_implemented') {
         status['issues'].add('Method channel handler not implemented');
-        status['suggestions'].add('Add method channel handler to MainActivity.kt (Android) or AppDelegate.swift (iOS)');
-        status['suggestions'].add('See PLATFORM_SETUP_GUIDE.md for code examples');
+        status['suggestions'].add('For published packages: Run flutter clean && flutter pub get && rebuild');
+        status['suggestions'].add('For local path dependencies: See BUILD_COMPATIBILITY.md');
         status['message'] = '❌ Method channel not implemented';
         status['nativeCode'] = 'Not implemented';
       } else {
