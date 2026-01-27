@@ -14,7 +14,6 @@ plugin:
     android:
       package: com.music_feature_analyzer
       pluginClass: MusicFeatureAnalyzerPlugin
-      default_package: music_feature_analyzer
     ios:
       pluginClass: MusicFeatureAnalyzerPlugin
 

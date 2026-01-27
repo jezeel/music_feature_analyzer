@@ -45,8 +45,6 @@ dependencies {
     
     /// To use the local version of the plugin, uncomment the following line:
     // implementation project(':music_feature_analyzer')
-
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7: 2.1.0"
 }
 
 flutter {

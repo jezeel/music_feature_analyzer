@@ -21,7 +21,6 @@ example/
 **/ios/Runner/GeneratedPluginRegistrant.*
 
 # Ignore Android auto-generated files
-**/android/app/
 **/android/local.properties
 **/android/.gradle/
 **/android/build/
