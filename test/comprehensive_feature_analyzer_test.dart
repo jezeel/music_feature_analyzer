@@ -76,6 +76,7 @@ void main() {
           signalEnergy: 0.85,
           brightness: 0.7,
           danceability: 0.9,
+          loudness: 0.7,
           spectralCentroid: 2500.0,
           spectralRolloff: 5000.0,
           zeroCrossingRate: 0.15,
@@ -265,12 +266,17 @@ void main() {
     // ============================================================================
     // BACKGROUND PROCESSING TESTS (Basic validation only - detailed tests in background_processing_test.dart)
     // ============================================================================
-    
+
     group('Background Processing', () {
       test('should validate background processing API', () {
-        // Test that background processing methods exist
         expect(MusicFeatureAnalyzer.extractFeaturesInBackground, isA<Function>());
         expect(MusicFeatureAnalyzer.getExtractionProgress, isA<Function>());
+      });
+
+      test('4-part segment positions are available via FeatureExtractor', () {
+        final startTimes = FeatureExtractor.getFourPartStartTimesSeconds(120000); // 2 min
+        expect(startTimes.length, 4);
+        expect(startTimes.first, lessThan(startTimes.last));
       });
     });
 

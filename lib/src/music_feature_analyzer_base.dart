@@ -21,8 +21,16 @@ import 'services/metadata_extractor/native_metadata_service.dart';
 /// FEATURES:
 /// - YAMNet AI analysis (instruments, vocals, genre, mood, energy)
 /// - Signal processing (tempo, beat, energy, spectral features)
-/// - Background processing with isolates
+/// - Background processing with isolates (audio extraction and AI run off the UI thread)
 /// - Progress tracking and statistics
+/// 
+/// ANALYSIS BEHAVIOUR:
+/// - Short songs or when duration is unknown: one short segment (~0.975 s) from the middle.
+/// - When duration is known and >= 30 s: the song is split into 4 equal parts; a short segment
+///   at the middle of each part (1/8, 3/8, 5/8, 7/8 of length) is analysed separately, and
+///   mean values are used for numeric features; categorical (genre, mood) use the highest-confidence segment.
+/// Duration is auto-fetched from metadata when you call [extractFeaturesInBackground] without
+/// [durationMsByPath], using the existing [MetadataExtractor].
 /// 
 /// USAGE:
 /// 1. Initialize: await MusicFeatureAnalyzer.initialize()
@@ -171,12 +179,14 @@ class MusicFeatureAnalyzer {
     }
   }
 
-  /// Extract features in background with isolate-based processing
+  /// Extract features in background with isolate-based processing.
   /// 
-  /// This is the main background processing method that uses isolates
-  /// to prevent UI blocking during heavy feature extraction.
+  /// Audio extraction and AI/signal processing run in a separate isolate so the UI stays responsive.
+  /// Pass [durationMsByPath] when you have song durations (e.g. from metadata) for more accurate
+  /// middle-segment extraction (e.g. for 3–4 minute songs).
   static Future<Map<String, ExtractedSongFeatures?>> extractFeaturesInBackground(
     List<String> filePaths, {
+    Map<String, int>? durationMsByPath,
     Function(int current, int total)? onProgress,
     Function(String filePath, ExtractedSongFeatures? features)? onSongUpdated,
     Function()? onCompleted,
@@ -211,11 +221,12 @@ class MusicFeatureAnalyzer {
 
       _logger.i('🎵 Found ${songsNeedingAnalysis.length} songs needing analysis');
 
-      // Process songs with UI responsiveness (same as original)
+      // Process songs with UI responsiveness; pass durations when available for accuracy
       final results = await _processSongsWithUIResponsiveness(
         songsNeedingAnalysis,
         onSongUpdated,
         onProgress,
+        durationMsByPath: durationMsByPath,
       );
       
       _logger.i('✅ UI-responsive background extraction completed');
@@ -596,13 +607,15 @@ class MusicFeatureAnalyzer {
       // Calculate energy from results
       energy = results.take(100).reduce((a, b) => a + b) / 100;
       
+      final vocalIntensity = hasVocals ? energy.clamp(0.0, 1.0) : 0.0;
       return {
         'instruments': instruments.isEmpty ? ['Unknown'] : instruments,
         'hasVocals': hasVocals,
-        'genre': genre,
+        'genre': genre.isEmpty ? 'Unknown' : genre,
         'mood': moodTags.isEmpty ? 'Neutral' : moodTags.first,
         'moodTags': moodTags.isEmpty ? ['Neutral'] : moodTags,
-        'energyValue': energy,
+        'energyValue': energy.clamp(0.0, 1.0),
+        'vocalIntensity': vocalIntensity,
       };
     } catch (e) {
       return {
@@ -612,8 +625,36 @@ class MusicFeatureAnalyzer {
         'mood': 'Neutral',
         'moodTags': ['Neutral'],
         'energyValue': 0.5,
+        'vocalIntensity': 0.0,
       };
     }
+  }
+
+  static String _genreFromMap(dynamic g) {
+    if (g == null) return 'Unknown';
+    final s = g.toString().trim();
+    return s.isEmpty ? 'Unknown' : s;
+  }
+
+  static double _calculateValenceInIsolate(double yamnetEnergy, List<String> moodTags, double signalEnergy) {
+    double moodComponent = 0.5;
+    for (final tag in moodTags) {
+      final lower = tag.toLowerCase();
+      if (lower.contains('happy') || lower.contains('upbeat') || lower.contains('joyful')) {
+        moodComponent = math.max(moodComponent, 0.6);
+        break;
+      }
+      if (lower.contains('sad') || lower.contains('melancholy')) {
+        moodComponent = math.min(moodComponent, 0.4);
+        break;
+      }
+    }
+    return (moodComponent * 0.7 + (signalEnergy * 0.4)).clamp(0.0, 1.0);
+  }
+
+  static double _calculateArousalInIsolate(double yamnetEnergy, double tempoBpm, double signalEnergy) {
+    final tempoComponent = ((tempoBpm.clamp(60.0, 200.0) - 60) / 140).clamp(0.0, 1.0);
+    return (signalEnergy * 0.6 + tempoComponent * 0.4).clamp(0.0, 1.0);
   }
 
   /// Calculate signal features in isolate (SAME AS ORIGINAL)
@@ -633,12 +674,19 @@ class MusicFeatureAnalyzer {
       final spectralRolloff = _calculateSpectralRolloffInIsolate(audioData);
       final zeroCrossingRate = _calculateZeroCrossingRateInIsolate(audioData);
       
+      // Brightness: normalized spectral centroid (0-1)
+      final brightness = (spectralCentroid / 8000.0).clamp(0.0, 1.0);
+      
+      // Loudness: perceived loudness 0-1
+      final loudness = _calculateLoudnessInIsolate(audioData);
+      
       return SignalFeatures(
         tempoBpm: tempoBpm,
         beatStrength: beatStrength,
         energy: energy,
-        brightness: spectralCentroid,
-        danceability: _calculateDanceabilityInIsolate(energy, tempoBpm),
+        brightness: brightness,
+        danceability: _calculateDanceabilityAdvancedInIsolate(audioData, tempoBpm, beatStrength, energy),
+        loudness: loudness,
         spectralCentroid: spectralCentroid,
         spectralRolloff: spectralRolloff,
         zeroCrossingRate: zeroCrossingRate,
@@ -649,13 +697,23 @@ class MusicFeatureAnalyzer {
         tempoBpm: 120.0,
         beatStrength: 0.5,
         energy: 0.5,
-        brightness: 2000.0,
+        brightness: 0.25,
         danceability: 0.5,
+        loudness: 0.0,
         spectralCentroid: 2000.0,
         spectralRolloff: 4000.0,
         zeroCrossingRate: 0.1,
       );
     }
+  }
+
+  /// Calculate perceived loudness (0-1) in isolate
+  static double _calculateLoudnessInIsolate(Float32List waveform) {
+    if (waveform.isEmpty) return 0.0;
+    final rms = _calculateEnergyInIsolate(waveform);
+    const refRms = 0.25;
+    final linear = (rms / refRms).clamp(0.0, 1.0);
+    return linear <= 0 ? 0.0 : math.pow(linear, 0.6).toDouble();
   }
 
   /// Calculate energy in isolate
@@ -997,12 +1055,77 @@ class MusicFeatureAnalyzer {
     return 1 << (n.bitLength);
   }
 
-  /// Calculate danceability in isolate (SAME AS ORIGINAL)
-  static double _calculateDanceabilityInIsolate(double energy, double tempo) {
-    // Danceability based on energy and tempo
-    final tempoFactor = math.min(1.0, tempo / 140.0);
-    final energyFactor = energy;
-    return (tempoFactor + energyFactor) / 2;
+  /// Advanced danceability in isolate: tempo zone (95–135 BPM), beat strength, regularity, energy, bass, loudness.
+  static double _calculateDanceabilityAdvancedInIsolate(
+    Float32List waveform,
+    double tempoBpm,
+    double beatStrength,
+    double energy,
+  ) {
+    if (waveform.isEmpty) return 0.0;
+    const optBpmLow = 95.0;
+    const optBpmHigh = 135.0;
+    const optBpmPeak = 115.0;
+    double tempoFactor;
+    if (tempoBpm >= optBpmLow && tempoBpm <= optBpmHigh) {
+      final distFromPeak = (tempoBpm - optBpmPeak).abs();
+      tempoFactor = 0.7 + 0.3 * math.max(0.0, 1.0 - distFromPeak / 25.0);
+    } else if (tempoBpm < optBpmLow) {
+      tempoFactor = 0.3 * (tempoBpm / optBpmLow);
+    } else {
+      tempoFactor = math.max(0.0, 0.5 - (tempoBpm - optBpmHigh) / 120.0);
+    }
+    tempoFactor = tempoFactor.clamp(0.0, 1.0);
+    final beatComponent = beatStrength.clamp(0.0, 1.0);
+    final regularity = _calculateBeatRegularityInIsolate(waveform);
+    final energyComponent = math.min(1.0, ((energy - 0.2).clamp(0.0, 0.7) / 0.7) * 1.2);
+    final bassComponent = _calculateBassRatioInIsolate(waveform);
+    final loudnessComponent = _calculateLoudnessInIsolate(waveform).clamp(0.0, 1.0);
+    const wTempo = 0.28;
+    const wBeat = 0.23;
+    const wRegularity = 0.18;
+    const wEnergy = 0.14;
+    const wBass = 0.09;
+    const wLoudness = 0.08;
+    final raw = wTempo * tempoFactor + wBeat * beatComponent + wRegularity * regularity + wEnergy * energyComponent + wBass * bassComponent + wLoudness * loudnessComponent;
+    return raw.clamp(0.0, 1.0);
+  }
+
+  static double _calculateBeatRegularityInIsolate(Float32List waveform) {
+    try {
+      const windowSize = 1024;
+      const hopSize = 512;
+      if (waveform.length < windowSize * 3) return 0.5;
+      final energies = <double>[];
+      for (int i = 0; i < waveform.length - windowSize; i += hopSize) {
+        final window = waveform.sublist(i, i + windowSize);
+        energies.add(_calculateEnergyInIsolate(Float32List.fromList(window)));
+      }
+      if (energies.length < 4) return 0.5;
+      final mean = energies.reduce((a, b) => a + b) / energies.length;
+      final variance = energies.map((e) => math.pow(e - mean, 2)).reduce((a, b) => a + b) / energies.length;
+      final std = math.sqrt(variance);
+      if (mean < 1e-9) return 0.5;
+      final cv = std / mean;
+      return (1.0 / (1.0 + cv * 2.0)).clamp(0.0, 1.0);
+    } catch (e) {
+      return 0.5;
+    }
+  }
+
+  static double _calculateBassRatioInIsolate(Float32List waveform) {
+    try {
+      final windowed = _applyHannWindowInIsolate(waveform);
+      final magnitudeSpectrum = _calculateMagnitudeSpectrumInIsolate(windowed);
+      if (magnitudeSpectrum.isEmpty) return 0.25;
+      final lowLen = (magnitudeSpectrum.length / 4).clamp(1.0, magnitudeSpectrum.length.toDouble()).toInt();
+      final lowEnergy = magnitudeSpectrum.take(lowLen).fold<double>(0.0, (s, m) => s + m);
+      final total = magnitudeSpectrum.fold<double>(0.0, (s, m) => s + m);
+      if (total < 1e-9) return 0.25;
+      return (lowEnergy / total).clamp(0.0, 1.0);
+    } catch (e) {
+      return 0.25;
+    }
   }
 
   /// Categorize tempo in isolate (SAME AS ORIGINAL)
@@ -1038,31 +1161,70 @@ class MusicFeatureAnalyzer {
   /// Categorize mood in isolate (SAME AS ORIGINAL)
   static String _categorizeMoodInIsolate(List<String> moodTags) {
     if (moodTags.isEmpty) return 'Neutral';
-    
     final positive = ['happy', 'upbeat', 'energetic', 'joyful', 'cheerful'];
     final negative = ['sad', 'melancholy', 'dark', 'somber', 'gloomy'];
     final calm = ['calm', 'peaceful', 'relaxing', 'serene', 'tranquil'];
-    
     for (final tag in moodTags) {
       final lower = tag.toLowerCase();
       if (positive.any((m) => lower.contains(m))) return 'Happy';
       if (negative.any((m) => lower.contains(m))) return 'Sad';
       if (calm.any((m) => lower.contains(m))) return 'Calm';
     }
-    
     return 'Neutral';
   }
 
-  /// Process songs with UI responsiveness using proper async scheduling (same as original)
+  /// Advanced mood category in isolate: Chill/Sleeping, Party/Energetic, Rap/Hip-hop, etc.
+  static String _computeMoodCategoryInIsolate(
+    List<String> moodTags,
+    String genre,
+    double tempoBpm,
+    double energy,
+  ) {
+    final genreLower = genre.toLowerCase();
+    final tagsLower = moodTags.map((t) => t.toLowerCase()).toList();
+    bool hasTag(String sub) => tagsLower.any((t) => t.contains(sub));
+    bool genreHas(String sub) => genreLower.contains(sub);
+
+    if (hasTag('lullaby') || hasTag('sleep') || hasTag('chill') || hasTag('ambient') || hasTag('soothing') || (tempoBpm < 85 && energy < 0.35)) return 'Chill / Sleeping';
+    if (hasTag('meditation') || hasTag('zen') || hasTag('peaceful') || (energy < 0.25 && tempoBpm < 90)) return 'Meditation';
+    if (hasTag('sad') || hasTag('melancholy') || hasTag('gloomy') || hasTag('somber')) return 'Sad / Melancholy';
+    if (hasTag('scary') || hasTag('dark') || hasTag('angry') || hasTag('frighten') || hasTag('tense')) return 'Scary / Dark';
+    if (genreHas('hip') || genreHas('rap') || hasTag('rap') || hasTag('hip')) return 'Rap / Hip-hop';
+    if (hasTag('party') || hasTag('dance') || hasTag('energetic') || hasTag('celebrat') || (tempoBpm >= 120 && energy >= 0.65)) return 'Party / Energetic';
+    if (hasTag('workout') || hasTag('intense') || hasTag('powerful') || hasTag('driving') || (tempoBpm >= 125 && energy >= 0.7)) return 'Workout';
+    if (hasTag('romantic') || hasTag('tender') || hasTag('love') || hasTag('passionate')) return 'Romantic';
+    if (hasTag('happy') || hasTag('joyful') || hasTag('upbeat') || hasTag('cheerful')) return 'Upbeat / Happy';
+    if (hasTag('focus') || hasTag('study') || (tempoBpm >= 80 && tempoBpm <= 110 && energy >= 0.3 && energy <= 0.6)) return 'Focus / Study';
+    if (hasTag('calm') || hasTag('relaxing') || hasTag('serene')) return 'Calm';
+    return _categorizeMoodInIsolate(moodTags);
+  }
+
+  /// Process songs with UI responsiveness using proper async scheduling (same as original).
+  /// When [durationMsByPath] is null, duration is auto-fetched from metadata for each file (using [MetadataExtractor]).
   static Future<Map<String, ExtractedSongFeatures?>> _processSongsWithUIResponsiveness(
     List<String> filePaths,
     Function(String filePath, ExtractedSongFeatures? features)? onSongUpdated,
-    Function(int current, int total)? onProgress,
-  ) async {
+    Function(int current, int total)? onProgress, {
+    Map<String, int>? durationMsByPath,
+  }) async {
     final results = <String, ExtractedSongFeatures?>{};
+    // Auto-fill duration from metadata when not provided (so caller doesn't need durationMsByPath)
+    Map<String, int>? effectiveDurations = durationMsByPath;
+    if (effectiveDurations == null) {
+      effectiveDurations = {};
+      await MetadataExtractor.initialize();
+      final metaList = await Future.wait(filePaths.map((p) => MetadataExtractor.extractMetadata(p)));
+      for (var i = 0; i < filePaths.length; i++) {
+        final song = metaList[i];
+        if (song != null && song.duration > 0) {
+          effectiveDurations[filePaths[i]] = song.duration;
+        }
+      }
+    }
     
     for (int i = 0; i < filePaths.length; i++) {
       final filePath = filePaths[i];
+      final durationMs = effectiveDurations[filePath];
       
       try {
         // Call progress callback
@@ -1070,8 +1232,8 @@ class MusicFeatureAnalyzer {
         
         _logger.i('🎵 Processing song ${i + 1}/${filePaths.length}: $filePath');
         
-        // Use isolate for heavy processing
-        final features = await _extractFeaturesInIsolate(filePath);
+        // Use isolate for heavy processing (audio + 4-part analysis when duration available)
+        final features = await _extractFeaturesInIsolate(filePath, durationMs: durationMs);
         
         results[filePath] = features;
         
@@ -1096,29 +1258,130 @@ class MusicFeatureAnalyzer {
     return results;
   }
 
-  /// Extract features in isolate to prevent UI blocking
-  static Future<ExtractedSongFeatures?> _extractFeaturesInIsolate(String filePath) async {
+  /// Extract features in isolate to prevent UI blocking.
+  /// Audio extraction runs inside the isolate so the main thread stays responsive.
+  /// [durationMs] improves middle-segment accuracy when provided (e.g. from metadata).
+  static Future<ExtractedSongFeatures?> _extractFeaturesInIsolate(String filePath, {int? durationMs}) async {
     try {
-      // Create song model
-      final song = SongModel(
-        id: filePath.hashCode.toString(),
-        title: _getFileName(filePath),
-        artist: 'Unknown',
-        album: 'Unknown',
-        duration: 0,
-        filePath: filePath,
-        features: null,
-      );
+      // Only model bytes and labels are prepared on main thread (fast); audio is extracted in isolate
+      final modelBytes = _extractor?.getModelBytes();
+      final labels = _extractor?.getLabels();
+      if (modelBytes == null || labels == null) {
+        _logger.e('❌ Model or labels not available - ensure initialize() was called');
+        return null;
+      }
 
-      // Pre-load assets in main thread (same as original)
-      final isolateData = await _prepareIsolateData(song);
-      
-      // Use compute for isolate-based processing with pre-loaded data
-      return await compute(_extractFeaturesInIsolateHelper, isolateData);
+      final input = IsolateInputData(
+        filePath: filePath,
+        durationMs: durationMs ?? 0,
+        yamnetModelBytes: modelBytes,
+        yamnetLabels: labels,
+        modelVersion: '1.0.0',
+        fileName: _getFileName(filePath),
+      );
+      return await compute(_extractFeaturesInIsolateFull, input);
     } catch (e) {
       _logger.e('❌ Error in isolate processing: $e');
       return null;
     }
+  }
+
+  /// Full isolate entry: extract audio inside isolate then run YAMNet + signal processing.
+  /// When duration >= 30s, uses 4-part analysis (4 equal segments, mean of features) for better accuracy.
+  static Future<ExtractedSongFeatures?> _extractFeaturesInIsolateFull(IsolateInputData input) async {
+    try {
+      final song = SongModel(
+        id: input.filePath.hashCode.toString(),
+        title: input.fileName,
+        artist: 'Unknown',
+        album: 'Unknown',
+        duration: input.durationMs,
+        filePath: input.filePath,
+        features: null,
+      );
+      const minDurationForFourPartMs = 30000; // 30 seconds
+      if (input.durationMs >= minDurationForFourPartMs) {
+        final startTimes = FeatureExtractor.getFourPartStartTimesSeconds(input.durationMs);
+        if (startTimes.length >= 4) {
+          final parts = <ExtractedSongFeatures>[];
+          for (final startSec in startTimes) {
+            final audioData = await FeatureExtractor.extractSegmentAtStartInIsolate(input.filePath, startSec);
+            if (audioData == null) continue;
+            final isolateData = IsolateFeatureData(
+              song: song,
+              yamnetModelBytes: input.yamnetModelBytes,
+              yamnetLabels: input.yamnetLabels,
+              modelVersion: input.modelVersion,
+              audioData: audioData,
+            );
+            final partFeatures = await _extractFeaturesInIsolateHelper(isolateData);
+            if (partFeatures != null) parts.add(partFeatures);
+          }
+          if (parts.isNotEmpty) return _combineFourPartFeatures(parts);
+        }
+      }
+      // Single-segment fallback (or short song)
+      final audioData = await FeatureExtractor.extractAudioInIsolate(input.filePath, input.durationMs);
+      final isolateData = IsolateFeatureData(
+        song: song,
+        yamnetModelBytes: input.yamnetModelBytes,
+        yamnetLabels: input.yamnetLabels,
+        modelVersion: input.modelVersion,
+        audioData: audioData,
+      );
+      return await _extractFeaturesInIsolateHelper(isolateData);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Combine 4 segment results: mean for numeric fields, merge/dedupe lists, pick categorical from max-confidence segment.
+  static ExtractedSongFeatures _combineFourPartFeatures(List<ExtractedSongFeatures> parts) {
+    if (parts.length == 1) return parts.first;
+    final n = parts.length;
+    double mean(Iterable<double> values) => values.reduce((a, b) => a + b) / n;
+    var bestIdx = 0;
+    for (var i = 1; i < parts.length; i++) {
+      if (parts[i].confidence > parts[bestIdx].confidence) bestIdx = i;
+    }
+    final best = parts[bestIdx];
+    final instruments = <String>{};
+    final moodTagsSet = <String>{};
+    for (final p in parts) {
+      instruments.addAll(p.instruments);
+      moodTagsSet.addAll(p.moodTags);
+    }
+    return ExtractedSongFeatures(
+      tempo: best.tempo,
+      beat: best.beat,
+      energy: best.energy,
+      instruments: instruments.toList(),
+      vocals: parts.any((p) => p.vocals != null) ? best.vocals : null,
+      mood: best.mood,
+      yamnetInstruments: instruments.toList(),
+      hasVocals: parts.any((p) => p.hasVocals),
+      estimatedGenre: best.estimatedGenre,
+      yamnetEnergy: mean(parts.map((p) => p.yamnetEnergy)),
+      moodTags: moodTagsSet.toList(),
+      tempoBpm: mean(parts.map((p) => p.tempoBpm)),
+      beatStrength: mean(parts.map((p) => p.beatStrength)),
+      signalEnergy: mean(parts.map((p) => p.signalEnergy)),
+      brightness: mean(parts.map((p) => p.brightness)),
+      danceability: mean(parts.map((p) => p.danceability)),
+      loudness: mean(parts.map((p) => p.loudness)),
+      overallEnergy: mean(parts.map((p) => p.overallEnergy)),
+      intensity: mean(parts.map((p) => p.intensity)),
+      spectralCentroid: mean(parts.map((p) => p.spectralCentroid)),
+      spectralRolloff: mean(parts.map((p) => p.spectralRolloff)),
+      zeroCrossingRate: mean(parts.map((p) => p.zeroCrossingRate)),
+      spectralFlux: mean(parts.map((p) => p.spectralFlux)),
+      complexity: mean(parts.map((p) => p.complexity)),
+      valence: mean(parts.map((p) => p.valence)),
+      arousal: mean(parts.map((p) => p.arousal)),
+      confidence: mean(parts.map((p) => p.confidence)),
+      analyzedAt: DateTime.now(),
+      analyzerVersion: best.analyzerVersion,
+    );
   }
 
   /// Helper function for isolate processing with pre-loaded data
@@ -1142,35 +1405,6 @@ class MusicFeatureAnalyzer {
       return features;
     } catch (e) {
       return null;
-    }
-  }
-
-  /// Prepare data for isolate processing (same as original)
-  static Future<IsolateFeatureData> _prepareIsolateData(SongModel song) async {
-    try {
-      _logger.d('📦 Preparing isolate data for: ${song.title}');
-
-      // Get pre-loaded model bytes and labels from main extractor
-      final modelBytes = _extractor?.getModelBytes();
-      final labels = _extractor?.getLabels();
-      
-      if (modelBytes == null || labels == null) {
-        throw Exception('Model or labels not available - ensure main extractor is initialized');
-      }
-
-      // Pre-process audio in main thread (FFmpeg can be used here)
-      final audioData = await _extractor?.extractAudioWaveform(song.filePath, Duration(minutes: 3));
-      
-      return IsolateFeatureData(
-        song: song,
-        yamnetModelBytes: modelBytes,
-        yamnetLabels: labels,
-        modelVersion: '1.0.0',
-        audioData: audioData,
-      );
-    } catch (e) {
-      _logger.e('❌ Error preparing isolate data: $e');
-      rethrow;
     }
   }
 
@@ -1206,33 +1440,41 @@ class MusicFeatureAnalyzer {
       _logger.d('🎵 Signal features: tempo=${signalFeatures.tempoBpm}, energy=${signalFeatures.energy}, spectralCentroid=${signalFeatures.spectralCentroid}');
       
       // Create comprehensive features (SAME AS ORIGINAL)
+      final yamnetEnergyVal = (yamnetFeatures['energyValue'] as num).toDouble().clamp(0.0, 1.0);
+      final signalEnergyVal = signalFeatures.energy.clamp(0.0, 1.0);
+      final moodTagsList = yamnetFeatures['moodTags'] as List<String>;
+      final valenceVal = _calculateValenceInIsolate(yamnetEnergyVal, moodTagsList, signalEnergyVal);
+      final arousalVal = _calculateArousalInIsolate(yamnetEnergyVal, signalFeatures.tempoBpm, signalEnergyVal);
+      final complexityVal = (signalFeatures.zeroCrossingRate.clamp(0.0, 1.0) + (signalFeatures.spectralCentroid / 8000.0) + 0.5) / 3.0;
+
       final songFeatures = ExtractedSongFeatures(
         tempo: _categorizeTempoInIsolate(signalFeatures.tempoBpm),
         beat: _categorizeBeatInIsolate(signalFeatures.beatStrength),
         energy: _categorizeEnergyInIsolate(signalFeatures.energy),
         instruments: yamnetFeatures['instruments'] as List<String>,
-        vocals: yamnetFeatures['hasVocals'] as bool ? _categorizeVocalsInIsolate(yamnetFeatures['energyValue'] as double) : null,
-        mood: _categorizeMoodInIsolate(yamnetFeatures['moodTags'] as List<String>),
+        vocals: yamnetFeatures['hasVocals'] as bool ? _categorizeVocalsInIsolate((yamnetFeatures['vocalIntensity'] as num?)?.toDouble() ?? yamnetEnergyVal) : null,
+        mood: _computeMoodCategoryInIsolate(moodTagsList, _genreFromMap(yamnetFeatures['genre']), signalFeatures.tempoBpm, signalEnergyVal),
         yamnetInstruments: yamnetFeatures['instruments'] as List<String>,
         hasVocals: yamnetFeatures['hasVocals'] as bool,
-        estimatedGenre: yamnetFeatures['genre'] as String,
-        yamnetEnergy: yamnetFeatures['energyValue'] as double,
-        moodTags: yamnetFeatures['moodTags'] as List<String>,
+        estimatedGenre: _genreFromMap(yamnetFeatures['genre']),
+        yamnetEnergy: yamnetEnergyVal,
+        moodTags: moodTagsList,
         tempoBpm: signalFeatures.tempoBpm,
         beatStrength: signalFeatures.beatStrength,
-        signalEnergy: signalFeatures.energy,
-        brightness: signalFeatures.spectralCentroid,
+        signalEnergy: signalEnergyVal,
+        brightness: signalFeatures.brightness,
         danceability: signalFeatures.danceability,
-        overallEnergy: ((yamnetFeatures['energyValue'] as double) + signalFeatures.energy) / 2.0,
-        intensity: signalFeatures.energy,
+        loudness: signalFeatures.loudness,
+        overallEnergy: (yamnetEnergyVal + signalEnergyVal) / 2.0,
+        intensity: signalEnergyVal,
         spectralCentroid: signalFeatures.spectralCentroid,
         spectralRolloff: signalFeatures.spectralRolloff,
         zeroCrossingRate: signalFeatures.zeroCrossingRate,
-        spectralFlux: signalFeatures.energy * 0.5, // Simplified calculation
-        complexity: (signalFeatures.zeroCrossingRate + (signalFeatures.spectralCentroid / 8000.0)) / 2.0,
-        valence: yamnetFeatures['energyValue'] as double,
-        arousal: signalFeatures.energy,
-        confidence: (signalFeatures.beatStrength + signalFeatures.energy + (signalFeatures.spectralCentroid / 8000.0)) / 3.0,
+        spectralFlux: signalEnergyVal * 0.5,
+        complexity: complexityVal.clamp(0.0, 1.0),
+        valence: valenceVal,
+        arousal: arousalVal,
+        confidence: (signalFeatures.beatStrength + signalEnergyVal + signalFeatures.brightness) / 3.0,
         analyzerVersion: modelVersion,
         analyzedAt: DateTime.now(),
       );
@@ -1343,6 +1585,26 @@ class MusicFeatureAnalyzer {
   }
 }
 
+/// Input for background isolate: file path, duration, and pre-loaded model/labels.
+/// Audio is extracted inside the isolate to avoid UI lag.
+class IsolateInputData {
+  final String filePath;
+  final int durationMs;
+  final Uint8List yamnetModelBytes;
+  final List<String> yamnetLabels;
+  final String modelVersion;
+  final String fileName;
+
+  const IsolateInputData({
+    required this.filePath,
+    required this.durationMs,
+    required this.yamnetModelBytes,
+    required this.yamnetLabels,
+    required this.modelVersion,
+    required this.fileName,
+  });
+}
+
 /// Data model for passing feature extraction data to isolates
 /// This allows us to pre-load assets in the main thread and pass them to isolates
 class IsolateFeatureData {
@@ -1368,6 +1630,7 @@ class SignalFeatures {
   final double energy;
   final double brightness;
   final double danceability;
+  final double loudness;
   final double spectralCentroid;
   final double spectralRolloff;
   final double zeroCrossingRate;
@@ -1378,6 +1641,7 @@ class SignalFeatures {
     required this.energy,
     required this.brightness,
     required this.danceability,
+    required this.loudness,
     required this.spectralCentroid,
     required this.spectralRolloff,
     required this.zeroCrossingRate,

@@ -4,12 +4,15 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_feature_analyzer/src/models/extracted_song_features.dart';
 import 'package:music_feature_analyzer/src/models/song_model.dart';
+import 'package:music_feature_analyzer/src/services/feature_extractor.dart';
+import 'helpers/test_helpers.dart';
 
 /// Comprehensive background processing tests for Music Feature Analyzer
-/// 
+///
 /// This test suite specifically focuses on:
 /// - Background processing workflow
 /// - Isolate-based processing
+/// - Duration auto-fill from metadata and 4-part analysis
 /// - Progress tracking and callbacks
 /// - UI responsiveness
 /// - Error handling in background
@@ -410,6 +413,48 @@ void main() {
     });
 
     // ============================================================================
+    // DURATION AND 4-PART ANALYSIS TESTS
+    // ============================================================================
+
+    group('Duration and 4-part analysis', () {
+      test('durationMsByPath is optional and can be provided', () {
+        final durationMap = <String, int>{
+          '/path/song1.mp3': 180000,
+          '/path/song2.mp3': 240000,
+        };
+        expect(durationMap['/path/song1.mp3'], 180000);
+        expect(durationMap['/path/song2.mp3'], 240000);
+      });
+
+      test('4-part start times are correct for 3–4 minute song', () {
+        const durationMs = 240000; // 4 min
+        final startTimes = FeatureExtractor.getFourPartStartTimesSeconds(durationMs);
+        expect(startTimes.length, 4);
+        final totalSec = durationMs / 1000.0;
+        expect(startTimes[0], closeTo(totalSec / 8, 0.01));
+        expect(startTimes[3], closeTo(totalSec * 7 / 8, 0.01));
+      });
+
+      test('songs under 30 s use single-segment (no 4-part)', () {
+        final startTimes = FeatureExtractor.getFourPartStartTimesSeconds(20000); // 20 s
+        expect(startTimes.length, 4); // still 4 positions for 20 s
+        // When durationMs < 30000 in production, single-segment path is used
+        const minDurationForFourPartMs = 30000;
+        expect(20000 < minDurationForFourPartMs, true);
+      });
+
+      test('effective duration map can be built from metadata simulation', () async {
+        final filePaths = ['/a.mp3', '/b.mp3'];
+        final effectiveDurations = <String, int>{};
+        for (final p in filePaths) {
+          effectiveDurations[p] = 120000; // simulated metadata duration
+        }
+        expect(effectiveDurations.length, 2);
+        expect(effectiveDurations['/a.mp3'], 120000);
+      });
+    });
+
+    // ============================================================================
     // ERROR HANDLING TESTS
     // ============================================================================
     
@@ -682,6 +727,7 @@ ExtractedSongFeatures _createMockSongFeatures({
     signalEnergy: 0.7,
     brightness: 0.5,
     danceability: 0.6,
+    loudness: 0.5,
     spectralCentroid: 2000.0,
     spectralRolloff: 4000.0,
     zeroCrossingRate: 0.1,

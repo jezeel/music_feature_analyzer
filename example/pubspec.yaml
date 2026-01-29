@@ -19,7 +19,7 @@ dependencies:
   music_feature_analyzer:
     git:
       url: https://github.com/jezeel/music_feature_analyzer.git
-      ref: main
+      ref: 1.0.1-beta
 
   # To use the local version of the plugin, uncomment the following lines:
   # music_feature_analyzer:

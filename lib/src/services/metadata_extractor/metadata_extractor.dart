@@ -475,33 +475,39 @@ class MetadataExtractor {
         ? DateTime.now().millisecondsSinceEpoch.toString() 
         : id.trim();
 
-    // Validate Title - must not be empty, use filename as fallback
-    String validatedTitle = title.trim();
-    if (validatedTitle.isEmpty || 
+    // Validate Title - must not be empty, use filename as fallback; normalize string
+    String validatedTitle = MetadataUtils.cleanString(title) ?? title.trim();
+    if (validatedTitle.isEmpty ||
         validatedTitle.toLowerCase() == 'unknown' ||
         validatedTitle.toLowerCase() == 'untitled' ||
         validatedTitle.length < 2) {
       validatedTitle = _extractTitleFromPath(filePath);
       _logger.d('Title was empty or invalid, using filename: $validatedTitle');
     }
+    validatedTitle = validatedTitle.trim();
+    if (validatedTitle.length > 200) validatedTitle = validatedTitle.substring(0, 200);
 
-    // Validate Artist - must not be empty
-    String validatedArtist = artist.trim();
-    if (validatedArtist.isEmpty || 
+    // Validate Artist - must not be empty; normalize string
+    String validatedArtist = MetadataUtils.cleanString(artist) ?? artist.trim();
+    if (validatedArtist.isEmpty ||
         validatedArtist.toLowerCase() == 'unknown artist' ||
         validatedArtist.length < 2) {
       validatedArtist = 'Unknown Artist';
       _logger.d('Artist was empty or invalid, using default: $validatedArtist');
     }
+    validatedArtist = validatedArtist.trim();
+    if (validatedArtist.length > 120) validatedArtist = validatedArtist.substring(0, 120);
 
-    // Validate Album - must not be empty
-    String validatedAlbum = album.trim();
-    if (validatedAlbum.isEmpty || 
+    // Validate Album - must not be empty; normalize string
+    String validatedAlbum = MetadataUtils.cleanString(album) ?? album.trim();
+    if (validatedAlbum.isEmpty ||
         validatedAlbum.toLowerCase() == 'unknown album' ||
         validatedAlbum.length < 2) {
       validatedAlbum = 'Unknown Album';
       _logger.d('Album was empty or invalid, using default: $validatedAlbum');
     }
+    validatedAlbum = validatedAlbum.trim();
+    if (validatedAlbum.length > 120) validatedAlbum = validatedAlbum.substring(0, 120);
 
     // Validate Duration - must be non-negative, minimum 0
     final validatedDuration = duration.inMilliseconds < 0 
@@ -525,10 +531,14 @@ class MetadataExtractor {
       }
     }
 
-    // Validate Genre - clean and validate
-    final validatedGenre = genre != null && genre.trim().isNotEmpty 
-        ? MetadataUtils.cleanString(genre) 
-        : null;
+    // Validate Genre - clean, normalize, and cap length
+    String? validatedGenre;
+    if (genre != null && genre.trim().isNotEmpty) {
+      validatedGenre = MetadataUtils.cleanString(genre);
+      if (validatedGenre != null && validatedGenre.length > 60) {
+        validatedGenre = validatedGenre.substring(0, 60);
+      }
+    }
 
     // Validate Year - must be between 1900 and current year + 1
     int? validatedYear;
@@ -613,23 +623,24 @@ class MetadataExtractor {
       }
     }
 
-    // Validate MIME Type - must not be empty, fallback to extension
+    // Validate MIME Type - must not be empty, lowercase, fallback to extension
     String? validatedMimeType;
     if (mimeType != null && mimeType.trim().isNotEmpty) {
-      validatedMimeType = mimeType.trim();
+      validatedMimeType = mimeType.trim().toLowerCase();
     } else {
       validatedMimeType = MetadataUtils.getMimeTypeFromExtension(filePath);
     }
 
-    // Validate Date Added - must not be in the future
+    // Validate Date Added - must not be in the future and must be after 1900
     DateTime? validatedDateAdded;
     if (dateAdded != null) {
       final now = DateTime.now();
-      if (dateAdded.isBefore(now.add(const Duration(days: 1))) || 
-          dateAdded.isAfter(DateTime(1900))) {
+      final notFuture = dateAdded.isBefore(now.add(const Duration(days: 1)));
+      final reasonablePast = dateAdded.isAfter(DateTime(1900, 1, 1));
+      if (notFuture && reasonablePast) {
         validatedDateAdded = dateAdded;
       } else {
-        _logger.w('Invalid date added: $dateAdded');
+        _logger.w('Invalid date added: $dateAdded (notFuture=$notFuture, reasonablePast=$reasonablePast)');
         validatedDateAdded = DateTime.now();
       }
     } else {

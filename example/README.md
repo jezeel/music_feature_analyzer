@@ -73,30 +73,31 @@ void main() async {
 }
 ```
 
-### 3. **Analyze Songs**
+### 3. **Analyze songs**
 ```dart
-// Single song analysis
-final features = await MusicFeatureAnalyzer.analyzeSong('path/to/song.mp3');
+// Get metadata first (optional; needed for SongModel with duration)
+final song = await MusicFeatureAnalyzer.metadata('path/to/song.mp3');
+if (song == null) return;
 
-// Multiple songs analysis
-final songs = [
-  Song(path: 'path/to/song1.mp3', title: 'Song 1'),
-  Song(path: 'path/to/song2.mp3', title: 'Song 2'),
-];
-final results = await MusicFeatureAnalyzer.analyzeSongs(songs);
+// Single song analysis (pass SongModel)
+final features = await MusicFeatureAnalyzer.analyzeSong(song);
 
-// Background processing
+// Multiple songs
+final songs = await MusicFeatureAnalyzer.extractMetadataBatch([
+  'path/to/song1.mp3',
+  'path/to/song2.mp3',
+]);
+final results = <ExtractedSongFeatures?>[];
+for (final s in songs) {
+  if (s != null) results.add(await MusicFeatureAnalyzer.analyzeSong(s));
+}
+
+// Background processing (file paths only; duration is auto-fetched from metadata)
 await MusicFeatureAnalyzer.extractFeaturesInBackground(
   ['path/to/song1.mp3', 'path/to/song2.mp3'],
-  onProgress: (current, total) {
-    print('Progress: $current/$total');
-  },
-  onSongUpdated: (filePath, features) {
-    print('Updated: $filePath');
-  },
-  onCompleted: () {
-    print('Analysis completed!');
-  },
+  onProgress: (current, total) => print('$current / $total'),
+  onSongUpdated: (filePath, features) => print('Updated: $filePath'),
+  onCompleted: () => print('Done'),
 );
 ```
 
@@ -202,20 +203,24 @@ AppLogger.success('Analysis completed');
 AppLogger.error('Analysis failed: $error');
 ```
 
-## 📚 API Reference
+## 📚 API reference
 
-### **Core Methods**
-- `MusicFeatureAnalyzer.initialize()` - Initialize the analyzer
-- `MusicFeatureAnalyzer.analyzeSong(path)` - Analyze single song
-- `MusicFeatureAnalyzer.analyzeSongs(songs)` - Analyze multiple songs
-- `MusicFeatureAnalyzer.extractFeaturesInBackground()` - Background processing
+### Core methods
+- `MusicFeatureAnalyzer.initialize()` — Initialize the analyzer (required before feature extraction)
+- `MusicFeatureAnalyzer.metadata(filePath)` — Extract metadata; returns `SongModel?`
+- `MusicFeatureAnalyzer.extractMetadataBatch(filePaths)` — Batch metadata extraction
+- `MusicFeatureAnalyzer.analyzeSong(song)` — Analyze a single song (`SongModel`); returns `ExtractedSongFeatures?`
+- `MusicFeatureAnalyzer.analyzeSongs(songs)` — Analyze multiple songs
+- `MusicFeatureAnalyzer.extractFeaturesInBackground(filePaths, { durationMsByPath, onProgress, onSongUpdated, onCompleted, onError })` — Background processing (duration optional; auto-fetched from metadata)
 
-### **Statistics**
-- `MusicFeatureAnalyzer.getStats()` - Get analysis statistics
-- `MusicFeatureAnalyzer.getExtractionProgress()` - Get progress info
+### Utilities
+- `MusicFeatureAnalyzer.getStats()` — Analysis statistics
+- `MusicFeatureAnalyzer.getExtractionProgress(filePaths)` — Progress info
+- `MusicFeatureAnalyzer.verifyPlatformSetup()` — Verify setup
+- `MusicFeatureAnalyzer.dispose()` — Clean up
 
-### **Status**
-- `MusicFeatureAnalyzer.isInitialized` - Check initialization status
+### Status
+- `MusicFeatureAnalyzer.isInitialized` — Whether the analyzer is initialized
 
 ## 🐛 Troubleshooting
 
@@ -252,9 +257,9 @@ This example is provided under the same license as the `music_feature_analyzer` 
 
 ## 🔗 Links
 
-- [Package Documentation](../README.md)
-- [Pub.dev Package](https://pub.dev/packages/music_feature_analyzer)
-- [GitHub Repository](https://github.com/your-username/music_feature_analyzer)
+- [Package documentation](../README.md)
+- [Pub.dev package](https://pub.dev/packages/music_feature_analyzer)
+- [GitHub repository](https://github.com/jezeel/music_feature_analyzer)
 
 ---
 

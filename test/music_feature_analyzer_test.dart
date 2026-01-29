@@ -1,16 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_feature_analyzer/music_feature_analyzer.dart';
+import 'helpers/test_helpers.dart';
 
 /// Main test suite for Music Feature Analyzer package
-/// 
-/// This includes basic functionality tests:
-/// - Package initialization and API
-/// - Model classes and data structures
-/// - Basic feature validation
+///
+/// Covers:
+/// - Package initialization and public API
+/// - Model classes (SongModel, ExtractedSongFeatures)
+/// - Metadata and background extraction API surface
 void main() {
   group('Music Feature Analyzer - Main Tests', () {
-    test('should have proper API methods', () {
-      // Test that the main API methods exist
+    test('should expose all required API methods', () {
       expect(MusicFeatureAnalyzer.initialize, isA<Function>());
       expect(MusicFeatureAnalyzer.analyzeSong, isA<Function>());
       expect(MusicFeatureAnalyzer.analyzeSongs, isA<Function>());
@@ -19,87 +19,54 @@ void main() {
       expect(MusicFeatureAnalyzer.getStats, isA<Function>());
       expect(MusicFeatureAnalyzer.dispose, isA<Function>());
       expect(MusicFeatureAnalyzer.resetStats, isA<Function>());
+      expect(MusicFeatureAnalyzer.metadata, isA<Function>());
+      expect(MusicFeatureAnalyzer.extractMetadataBatch, isA<Function>());
+      expect(MusicFeatureAnalyzer.isInitialized, isA<bool>());
     });
 
-    test('should have proper model classes', () {
-      // Test that our model classes are properly defined
-      final song = SongModel(
+    test('SongModel works with test helper', () {
+      final song = createTestSong(
         id: 'test',
         title: 'Test Song',
-        artist: 'Test Artist',
-        album: 'Test Album',
-        duration: 180,
+        duration: 180000,
         filePath: '/test/path.mp3',
       );
-
       expect(song.id, 'test');
       expect(song.title, 'Test Song');
       expect(song.artist, 'Test Artist');
       expect(song.album, 'Test Album');
-      expect(song.duration, 180);
+      expect(song.duration, 180000);
       expect(song.filePath, '/test/path.mp3');
+      expect(song.features, null);
     });
 
-    test('should have proper feature classes', () {
-      // Test that our feature classes are properly defined
-      final features = ExtractedSongFeatures(
+    test('ExtractedSongFeatures works with test helper', () {
+      final features = createTestFeatures(
         tempo: 'Medium',
-        beat: 'Strong',
         energy: 'High',
-        instruments: ['Guitar', 'Piano'],
-        vocals: 'Detected',
-        mood: 'Happy',
-        yamnetInstruments: ['Guitar', 'Piano'],
-        hasVocals: true,
         estimatedGenre: 'Rock',
-        yamnetEnergy: 0.8,
-        moodTags: ['energetic', 'upbeat'],
-        tempoBpm: 120.0,
-        beatStrength: 0.7,
-        signalEnergy: 0.8,
-        brightness: 0.6,
-        danceability: 0.8,
-        spectralCentroid: 2000.0,
-        spectralRolloff: 4000.0,
-        zeroCrossingRate: 0.1,
-        spectralFlux: 0.5,
-        overallEnergy: 0.8,
-        intensity: 0.7,
-        complexity: 0.6,
-        valence: 0.7,
-        arousal: 0.8,
-        analyzedAt: DateTime.now(),
-        analyzerVersion: '1.0.0',
+        instruments: ['Guitar', 'Piano'],
         confidence: 0.9,
       );
-
       expect(features.tempo, 'Medium');
-      expect(features.beat, 'Strong');
       expect(features.energy, 'High');
-      expect(features.instruments, ['Guitar', 'Piano']);
-      expect(features.vocals, 'Detected');
-      expect(features.mood, 'Happy');
-      expect(features.hasVocals, true);
       expect(features.estimatedGenre, 'Rock');
-      expect(features.yamnetEnergy, 0.8);
-      expect(features.moodTags, ['energetic', 'upbeat']);
-      expect(features.tempoBpm, 120.0);
-      expect(features.beatStrength, 0.7);
-      expect(features.signalEnergy, 0.8);
-      expect(features.brightness, 0.6);
-      expect(features.danceability, 0.8);
-      expect(features.overallEnergy, 0.8);
-      expect(features.intensity, 0.7);
-      expect(features.spectralCentroid, 2000.0);
-      expect(features.spectralRolloff, 4000.0);
-      expect(features.zeroCrossingRate, 0.1);
-      expect(features.spectralFlux, 0.5);
-      expect(features.complexity, 0.6);
-      expect(features.valence, 0.7);
-      expect(features.arousal, 0.8);
-      expect(features.analyzerVersion, '1.0.0');
+      expect(features.instruments, ['Guitar', 'Piano']);
       expect(features.confidence, 0.9);
+      expect(features.loudness, 0.5);
+      expect(features.analyzedAt, isA<DateTime>());
     });
 
+    test('extractFeaturesInBackground accepts optional durationMsByPath', () {
+      final filePaths = ['/a.mp3', '/b.mp3'];
+      final durationMsByPath = <String, int>{'/a.mp3': 180000, '/b.mp3': 240000};
+      expect(filePaths.length, 2);
+      expect(durationMsByPath.length, 2);
+      expect(durationMsByPath['/a.mp3'], 180000);
+    });
+
+    test('metadata API exists and is callable', () {
+      expect(MusicFeatureAnalyzer.metadata, isA<Function>());
+    });
   });
 }

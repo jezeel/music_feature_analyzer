@@ -98,8 +98,9 @@ class FeatureExtractor {
     try {
       _logger.i('🎵 Extracting features for: ${song.title}');
       
-      // Extract audio data
-      final audioData = await _extractAudioData(song.filePath);
+      // Extract audio data; use actual song duration when available for accurate middle-segment extraction
+      final totalDuration = song.duration > 0 ? Duration(milliseconds: song.duration) : null;
+      final audioData = await _extractAudioData(song.filePath, totalDuration: totalDuration);
       if (audioData == null) {
         _logger.e('❌ Failed to extract audio data for: ${song.title}');
         _failedAnalyses++;
@@ -198,7 +199,8 @@ class FeatureExtractor {
   }
 
   /// Extract audio data from file
-  Future<Float32List?> _extractAudioData(String filePath) async {
+  /// [totalDuration] when provided (e.g. from [SongModel.duration]) is used to pick a segment from the middle of the song for better accuracy.
+  Future<Float32List?> _extractAudioData(String filePath, {Duration? totalDuration}) async {
     try {
       _logger.d('🎵 Extracting audio data from: $filePath');
       
@@ -206,8 +208,8 @@ class FeatureExtractor {
       final tempDir = await getTemporaryDirectory();
       final outputPath = '${tempDir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.raw';
       
-      // Build sophisticated FFmpeg command (same as original)
-      final command = _buildFFmpegCommand(filePath, outputPath);
+      // Build sophisticated FFmpeg command (same as original); use actual duration when available
+      final command = _buildFFmpegCommand(filePath, outputPath, totalDuration: totalDuration);
       
       // Execute FFmpeg
       final session = await FFmpegKit.execute(command);
@@ -254,10 +256,12 @@ class FeatureExtractor {
     }
   }
   
-  /// Build FFmpeg command for audio extraction (same as original)
-  String _buildFFmpegCommand(String inputPath, String outputPath) {
-    // Calculate optimal start time (middle of song)
-    final startTime = _calculateMiddleStartTime(Duration(minutes: 3)); // Default 3 minutes
+  /// Build FFmpeg command for audio extraction (same as original).
+  /// [totalDuration] when provided improves accuracy by extracting from the true middle of the song (e.g. for a 4‑minute song).
+  String _buildFFmpegCommand(String inputPath, String outputPath, {Duration? totalDuration}) {
+    // Use actual song duration when available; otherwise assume ~3 min for backward compatibility
+    final duration = totalDuration ?? const Duration(minutes: 3);
+    final startTime = _calculateMiddleStartTime(duration);
     
     return [
       '-y',
@@ -414,15 +418,16 @@ class FeatureExtractor {
     final zeroCrossingRate = _calculateZeroCrossingRate(waveform);
     final tempoBpm = _estimateTempo(waveform);
     final beatStrength = _calculateBeatStrength(waveform);
-    final brightness = spectralCentroid;
     final danceability = _calculateDanceability(waveform, tempoBpm);
+    final loudness = _calculateLoudness(waveform);
     
     return SignalFeatures(
       tempoBpm: tempoBpm,
       beatStrength: beatStrength,
       energy: energy,
-      brightness: brightness,
+      brightness: (spectralCentroid / 8000.0).clamp(0.0, 1.0),
       danceability: danceability,
+      loudness: loudness,
       spectralCentroid: spectralCentroid,
       spectralRolloff: spectralRolloff,
       zeroCrossingRate: zeroCrossingRate,
@@ -434,8 +439,12 @@ class FeatureExtractor {
     final instruments = <String>[];
     final moodTags = <String>[];
     bool hasVocals = false;
+    double vocalIntensity = 0.0;
     String genre = 'Unknown';
     double energy = 0.5;
+    double moodScore = 0.5;
+    double confidenceSum = 0.0;
+    int confidenceCount = 0;
     
     // Get top predictions (same as original)
     final topIndices = _getTopIndices(scores, 15);
@@ -459,54 +468,106 @@ class FeatureExtractor {
       
       _logger.d('🔍 YAMNet Debug - Label: ${label.displayName} | Score: $score | isInstrument: ${label.isInstrument} | isVocal: ${label.isVocal} | isGenre: ${label.isGenre} | isMood: ${label.isMood}');
       
-      // Additional genre detection debugging
       if (label.isGenre) {
         _logger.d('🎵 Genre candidate: ${label.displayName} (score: $score, current genre: $genre)');
       }
       
-      // FIXED: Add confidence thresholds for better accuracy (same as original)
-      const confidenceThreshold = 0.1; // Minimum confidence score
+      const confidenceThreshold = 0.1;
+      if (score < confidenceThreshold) continue;
       
-      if (score < confidenceThreshold) continue; // Skip low-confidence predictions
+      confidenceSum += score;
+      confidenceCount++;
       
-      // Categorize based on label type with confidence filtering (same as original)
       if (label.isInstrument && instruments.length < 5 && score > 0.15) {
         instruments.add(label.displayName);
         _logger.d('✅ Added instrument: ${label.displayName} (confidence: $score)');
       } else if (label.isVocal && score > 0.2) {
         hasVocals = true;
+        vocalIntensity = math.max(vocalIntensity, score);
         _logger.d('✅ Detected vocals: ${label.displayName} (confidence: $score)');
       } else if (label.isGenre && genre == 'Unknown' && score > 0.05) {
         genre = label.displayName;
         _logger.d('✅ Detected genre: ${label.displayName} (confidence: $score)');
       } else if (label.isMood && moodTags.length < 3 && score > 0.15) {
         moodTags.add(label.displayName);
+        moodScore = _moodTagToScore(label.displayName, score, moodScore);
         _logger.d('✅ Added mood: ${label.displayName} (confidence: $score)');
       }
       
       if (label.isEnergyRelated) {
-        // FIXED: Use weighted average instead of max to capture all energy information (same as original)
         energy = (energy + score) / 2;
         _logger.d('✅ Energy related: ${label.displayName} | Score: $score');
       }
     }
     
-    _logger.d('🔍 YAMNet Debug - Final results: instruments=$instruments, hasVocals=$hasVocals, genre=$genre, energy=$energy, moodTags=$moodTags');
+    final confidence = confidenceCount > 0
+        ? (confidenceSum / confidenceCount).clamp(0.0, 1.0)
+        : 0.5;
+    if (hasVocals && vocalIntensity <= 0) vocalIntensity = 0.5;
     
-    // Ensure defaults (same as original)
+    _logger.d('🔍 YAMNet Debug - Final results: instruments=$instruments, hasVocals=$hasVocals, genre=$genre, energy=$energy, moodTags=$moodTags, moodScore=$moodScore, vocalIntensity=$vocalIntensity');
+    
     if (instruments.isEmpty) instruments.add('Unknown');
     if (moodTags.isEmpty) moodTags.add('Neutral');
     
     return YAMNetResults(
       instruments: instruments,
       hasVocals: hasVocals,
-      genre: genre,
+      genre: genre.isEmpty ? 'Unknown' : genre,
       energy: energy.clamp(0.0, 1.0),
       moodTags: moodTags,
-      moodScore: 0.5,
-      vocalIntensity: 0.5,
-      confidence: 0.5,
+      moodScore: moodScore.clamp(0.0, 1.0),
+      vocalIntensity: vocalIntensity.clamp(0.0, 1.0),
+      confidence: confidence,
     );
+  }
+  
+  /// Map mood tag to numeric score (0=sad/calm, 1=happy/energetic) for valence-style mood.
+  /// Covers: happy, sad, chill/sleeping, rap, party, romantic, workout, meditation, scary, etc.
+  double _moodTagToScore(String displayName, double score, double current) {
+    final lower = displayName.toLowerCase();
+    final weighted = score.clamp(0.0, 1.0);
+
+    // Positive / high-energy moods -> push score up
+    if (lower.contains('happy') || lower.contains('joyful') || lower.contains('upbeat') ||
+        lower.contains('cheerful') || lower.contains('exciting') || lower.contains('party') ||
+        lower.contains('celebrat') || lower.contains('dance') || lower.contains('energetic')) {
+      return math.max(current, 0.5 + weighted * 0.45);
+    }
+    if (lower.contains('romantic') || lower.contains('tender') || lower.contains('love') || lower.contains('passionate')) {
+      return math.max(current, 0.55 + weighted * 0.35);
+    }
+    if (lower.contains('workout') || lower.contains('intense') || lower.contains('powerful') || lower.contains('driving')) {
+      return math.max(current, 0.6 + weighted * 0.35);
+    }
+
+    // Negative / low-energy moods -> push score down
+    if (lower.contains('sad') || lower.contains('melancholy') || lower.contains('gloomy') ||
+        lower.contains('somber') || lower.contains('depress') || lower.contains('heartbreak')) {
+      return math.min(current, 0.35 - weighted * 0.35);
+    }
+    if (lower.contains('scary') || lower.contains('dark') || lower.contains('angry') || lower.contains('aggressive') ||
+        lower.contains('frighten') || lower.contains('tense')) {
+      return math.min(current, 0.4 - weighted * 0.2);
+    }
+
+    // Chill / sleeping / meditation -> neutral-to-calm (0.35–0.55)
+    if (lower.contains('calm') || lower.contains('peaceful') || lower.contains('relaxing') ||
+        lower.contains('serene') || lower.contains('chill') || lower.contains('lullaby') ||
+        lower.contains('sleep') || lower.contains('meditation') || lower.contains('zen') ||
+        lower.contains('ambient') || lower.contains('soothing')) {
+      return (current + 0.45) / 2;
+    }
+    if (lower.contains('focus') || lower.contains('study') || lower.contains('concentration')) {
+      return (current + 0.5) / 2;
+    }
+
+    // Rap / hip-hop vibe -> often mid-high energy (0.5–0.7)
+    if (lower.contains('rap') || lower.contains('hip') || lower.contains('hip hop')) {
+      return math.max(current, 0.45 + weighted * 0.4);
+    }
+
+    return current;
   }
   
   /// Get top N indices from scores array with confidence thresholding (same as original)
@@ -610,34 +671,60 @@ class FeatureExtractor {
     return 'Pop music'; // Default to Pop instead of Unknown
   }
   
-  /// Infer mood from signal features (same as original)
+  /// Infer mood tags from signal features (fallback when YAMNet has no mood).
+  /// Covers: energetic, calm, upbeat, relaxing, sleeping/chill, party, meditation, etc.
   List<String> _inferMoodFromSignal(SignalFeatures signal) {
     final moodTags = <String>[];
-    
-    if (signal.energy > 0.7) {
+
+    if (signal.energy > 0.75) {
       moodTags.add('energetic');
-    } else if (signal.energy < 0.3) {
+      if (signal.tempoBpm > 115) moodTags.add('party');
+    } else if (signal.energy < 0.25) {
       moodTags.add('calm');
+      if (signal.tempoBpm < 75) {
+        moodTags.add('relaxing');
+        moodTags.add('chill');
+      }
+      if (signal.tempoBpm < 65 && signal.energy < 0.2) moodTags.add('meditation');
     } else {
       moodTags.add('neutral');
     }
-    
-    if (signal.tempoBpm > 120) {
+
+    if (signal.tempoBpm > 125) {
       moodTags.add('upbeat');
+      if (signal.energy > 0.6) moodTags.add('dance');
     } else if (signal.tempoBpm < 80) {
       moodTags.add('relaxing');
+      if (signal.energy < 0.35) moodTags.add('chill');
     }
-    
+
+    if (signal.tempoBpm >= 85 && signal.tempoBpm <= 105 && signal.energy >= 0.4 && signal.energy <= 0.65) {
+      moodTags.add('focus');
+    }
+
     return moodTags.isEmpty ? ['neutral'] : moodTags;
   }
   
   /// Calculate RMS energy (same as original)
   double _calculateEnergy(Float32List waveform) {
+    if (waveform.isEmpty) return 0.0;
     double sum = 0.0;
     for (final sample in waveform) {
       sum += sample * sample;
     }
     return math.sqrt(sum / waveform.length);
+  }
+
+  /// Calculate perceived loudness (0.0-1.0 normalized).
+  /// Uses RMS with logarithmic-style mapping to approximate perceived loudness.
+  double _calculateLoudness(Float32List waveform) {
+    if (waveform.isEmpty) return 0.0;
+    final rms = _calculateEnergy(waveform);
+    // Map RMS to 0-1: typical RMS for normalized audio is ~0.01-0.5; clamp and scale
+    const refRms = 0.25; // Reference for "full" level
+    final linear = (rms / refRms).clamp(0.0, 1.0);
+    // Apply soft curve for perceived loudness (similar to dB perception)
+    return linear <= 0 ? 0.0 : math.pow(linear, 0.6).toDouble();
   }
   
   /// Calculate spectral centroid (same as original)
@@ -778,11 +865,101 @@ class FeatureExtractor {
     }
   }
   
-  /// Calculate danceability (same as original)
+  /// Calculate danceability (0–1). High value = well suited for dancing.
+  /// Uses: tempo in "dance zone" (95–135 BPM), beat strength, beat regularity, energy, bass presence, loudness.
   double _calculateDanceability(Float32List waveform, double tempo) {
+    if (waveform.isEmpty) return 0.0;
+
     final beatStrength = _calculateBeatStrength(waveform);
-    final tempoFactor = math.min(tempo / 120.0, 1.0);
-    return (beatStrength + tempoFactor) / 2;
+    final energy = _calculateEnergy(waveform);
+    final loudness = _calculateLoudness(waveform);
+
+    // 1) Tempo factor: optimal dance range ~95–135 BPM (peak ~115). Gaussian-style falloff outside.
+    const double optBpmLow = 95.0;
+    const double optBpmHigh = 135.0;
+    const double optBpmPeak = 115.0;
+    double tempoFactor;
+    if (tempo >= optBpmLow && tempo <= optBpmHigh) {
+      final distFromPeak = (tempo - optBpmPeak).abs();
+      tempoFactor = 0.7 + 0.3 * math.max(0.0, 1.0 - distFromPeak / 25.0);
+    } else if (tempo < optBpmLow) {
+      tempoFactor = 0.3 * (tempo / optBpmLow);
+    } else {
+      tempoFactor = math.max(0.0, 0.5 - (tempo - optBpmHigh) / 120.0);
+    }
+    tempoFactor = tempoFactor.clamp(0.0, 1.0);
+
+    // 2) Beat strength (0–1): strong beats support danceability.
+    final beatComponent = beatStrength.clamp(0.0, 1.0);
+
+    // 3) Beat regularity: steady groove = more danceable.
+    final regularity = _calculateBeatRegularity(waveform);
+
+    // 4) Energy: moderate–high ideal (0.35–0.9). Too low = not engaging; too high can be chaotic.
+    final energyIdeal = (energy - 0.2).clamp(0.0, 0.7) / 0.7;
+    final energyComponent = math.min(1.0, energyIdeal * 1.2);
+
+    // 5) Bass presence: low-frequency energy ratio. Bass helps dance groove.
+    final bassRatio = _calculateBassRatio(waveform);
+    final bassComponent = bassRatio.clamp(0.0, 1.0);
+
+    // 6) Loudness: moderate–high perceived loudness supports danceability (feel the beat); very quiet = less danceable.
+    final loudnessComponent = loudness.clamp(0.0, 1.0);
+
+    // Weights: tempo + beat + regularity + energy + bass + loudness (sum = 1.0).
+    const wTempo = 0.28;
+    const wBeat = 0.23;
+    const wRegularity = 0.18;
+    const wEnergy = 0.14;
+    const wBass = 0.09;
+    const wLoudness = 0.08;
+    final raw = wTempo * tempoFactor +
+        wBeat * beatComponent +
+        wRegularity * regularity +
+        wEnergy * energyComponent +
+        wBass * bassComponent +
+        wLoudness * loudnessComponent;
+    return raw.clamp(0.0, 1.0);
+  }
+
+  /// Beat regularity (0–1): low variance in frame energies = steady groove.
+  double _calculateBeatRegularity(Float32List waveform) {
+    try {
+      const windowSize = 1024;
+      const hopSize = 512;
+      if (waveform.length < windowSize * 3) return 0.5;
+      final energies = <double>[];
+      for (int i = 0; i < waveform.length - windowSize; i += hopSize) {
+        final window = waveform.sublist(i, i + windowSize);
+        energies.add(_calculateEnergy(Float32List.fromList(window)));
+      }
+      if (energies.length < 4) return 0.5;
+      final mean = energies.reduce((a, b) => a + b) / energies.length;
+      final variance = energies.map((e) => math.pow(e - mean, 2)).reduce((a, b) => a + b) / energies.length;
+      final std = math.sqrt(variance);
+      if (mean < 1e-9) return 0.5;
+      final cv = std / mean;
+      return (1.0 / (1.0 + cv * 2.0)).clamp(0.0, 1.0);
+    } catch (e) {
+      return 0.5;
+    }
+  }
+
+  /// Bass ratio (0–1): low-frequency energy / total energy. Sample rate 16 kHz, so low = first ~1/4 of bins.
+  double _calculateBassRatio(Float32List waveform) {
+    try {
+      final windowed = _applyHannWindow(waveform);
+      final fft = _performFFT(windowed);
+      final magnitudes = _calculateMagnitudeSpectrumFromFFT(fft);
+      if (magnitudes.isEmpty) return 0.25;
+      final lowLen = (magnitudes.length / 4).clamp(1.0, magnitudes.length.toDouble()).toInt();
+      final lowEnergy = magnitudes.take(lowLen).fold<double>(0.0, (s, m) => s + m);
+      final total = magnitudes.fold<double>(0.0, (s, m) => s + m);
+      if (total < 1e-9) return 0.25;
+      return (lowEnergy / total).clamp(0.0, 1.0);
+    } catch (e) {
+      return 0.25;
+    }
   }
   
   /// Apply Hann window to reduce spectral leakage (same as original)
@@ -841,6 +1018,39 @@ class FeatureExtractor {
   /// Calculate magnitude spectrum from FFT result (same as original)
   List<double> _calculateMagnitudeSpectrumFromFFT(List<Complex> fft) {
     return fft.map((c) => math.sqrt(c.real * c.real + c.imaginary * c.imaginary)).toList();
+  }
+  
+  /// Calculate spectral flux (normalized 0-1): frame-to-frame change in magnitude spectrum.
+  double _calculateSpectralFluxValue(Float32List waveform) {
+    try {
+      const windowSize = 1024;
+      const hopSize = 512;
+      if (waveform.length < windowSize * 2) return 0.0;
+      final prevMagnitudes = <double>[];
+      double totalFlux = 0.0;
+      int frameCount = 0;
+      for (int i = 0; i < waveform.length - windowSize; i += hopSize) {
+        final window = waveform.sublist(i, i + windowSize);
+        final windowed = _applyHannWindow(Float32List.fromList(window));
+        final fft = _performFFT(windowed);
+        final magnitudes = _calculateMagnitudeSpectrumFromFFT(fft);
+        if (prevMagnitudes.isNotEmpty && magnitudes.length == prevMagnitudes.length) {
+          double flux = 0.0;
+          for (int k = 0; k < magnitudes.length; k++) {
+            flux += math.pow(magnitudes[k] - prevMagnitudes[k], 2);
+          }
+          totalFlux += math.sqrt(flux);
+          frameCount++;
+        }
+        prevMagnitudes.clear();
+        prevMagnitudes.addAll(magnitudes);
+      }
+      if (frameCount == 0) return 0.0;
+      final avgFlux = totalFlux / frameCount;
+      return math.min(avgFlux * 2.0, 1.0);
+    } catch (e) {
+      return 0.0;
+    }
   }
   
   /// Find next power of 2 (same as original)
@@ -971,11 +1181,11 @@ class FeatureExtractor {
     // Calculate energy
     final energy = _calculateEnergy(audioData);
     
-    // Calculate spectral flux (simple approximation using energy variance)
-    final spectralFlux = energy * 0.5; // Simplified calculation
+    // Calculate spectral flux (frame-to-frame magnitude change for dynamics)
+    final spectralFlux = _calculateSpectralFluxValue(audioData);
     
-    // Calculate complexity (combination of features)
-    final complexity = (zeroCrossingRate + (spectralCentroid / 8000.0)) / 2.0;
+    // Calculate complexity (combination of spectral and temporal variation)
+    final complexity = (zeroCrossingRate + (spectralCentroid / 8000.0) + spectralFlux.clamp(0.0, 1.0)) / 3.0;
     
     // Calculate overall energy
     final overallEnergy = energy;
@@ -985,6 +1195,9 @@ class FeatureExtractor {
     
     // Calculate danceability (combination of tempo and beat strength)
     final danceability = _calculateDanceability(audioData, tempoBpm);
+    
+    // Calculate loudness (perceived loudness 0-1)
+    final loudness = _calculateLoudness(audioData);
     
     // Calculate confidence (combination of all features)
     final confidence = (beatStrength + energy + brightness) / 3.0;
@@ -1001,6 +1214,7 @@ class FeatureExtractor {
       overallEnergy: overallEnergy,
       brightness: brightness,
       danceability: danceability,
+      loudness: loudness,
       confidence: confidence,
     );
   }
@@ -1018,7 +1232,13 @@ class FeatureExtractor {
       energy: _categorizeEnergy(signalResults.overallEnergy),
       instruments: yamnetResults.instruments,
       vocals: yamnetResults.hasVocals ? _categorizeVocals(yamnetResults.vocalIntensity) : null,
-      mood: _categorizeMood(yamnetResults.moodScore),
+      mood: _computeMoodCategory(
+        yamnetResults.moodScore,
+        yamnetResults.moodTags,
+        yamnetResults.genre,
+        signalResults.tempoBpm,
+        signalResults.overallEnergy,
+      ),
       
       // YAMNet results
       yamnetInstruments: yamnetResults.instruments,
@@ -1033,6 +1253,7 @@ class FeatureExtractor {
       signalEnergy: signalResults.overallEnergy,
       brightness: signalResults.brightness,
       danceability: signalResults.danceability,
+      loudness: signalResults.loudness,
       
       // Spectral features
       spectralCentroid: signalResults.spectralCentroid,
@@ -1085,39 +1306,114 @@ class FeatureExtractor {
     return 'Strong';
   }
 
-  /// Categorize mood
+  /// Categorize mood from score only (fallback).
   String _categorizeMood(double moodScore) {
-    if (moodScore < 0.2) return 'Sad';
-    if (moodScore < 0.4) return 'Melancholy';
-    if (moodScore < 0.6) return 'Neutral';
-    if (moodScore < 0.8) return 'Happy';
+    final s = moodScore.clamp(0.0, 1.0);
+    if (s < 0.2) return 'Sad';
+    if (s < 0.35) return 'Melancholy';
+    if (s < 0.45) return 'Calm';
+    if (s < 0.55) return 'Neutral';
+    if (s < 0.7) return 'Happy';
+    if (s < 0.85) return 'Upbeat';
     return 'Very Happy';
+  }
+
+  /// Compute advanced mood category from score, tags, genre, tempo, and energy.
+  /// Returns user-friendly categories: Chill/Sleeping, Party/Energetic, Rap/Hip-hop, Romantic, Workout, Meditation, Sad/Melancholy, Scary/Dark, Upbeat/Happy, Focus/Study, Neutral.
+  String _computeMoodCategory(
+    double moodScore,
+    List<String> moodTags,
+    String genre,
+    double tempoBpm,
+    double energy,
+  ) {
+    final s = moodScore.clamp(0.0, 1.0);
+    final genreLower = genre.toLowerCase();
+    final tagsLower = moodTags.map((t) => t.toLowerCase()).toList();
+
+    bool hasTag(String sub) => tagsLower.any((t) => t.contains(sub));
+    bool genreHas(String sub) => genreLower.contains(sub);
+
+    // Chill / Sleeping: lullaby, sleep, calm, chill, ambient, low tempo + low energy
+    if (hasTag('lullaby') || hasTag('sleep') || hasTag('chill') || hasTag('ambient') ||
+        hasTag('soothing') || (tempoBpm < 85 && energy < 0.35)) {
+      return 'Chill / Sleeping';
+    }
+    // Meditation: zen, meditation, peaceful, very low energy
+    if (hasTag('meditation') || hasTag('zen') || hasTag('peaceful') || (energy < 0.25 && tempoBpm < 90)) {
+      return 'Meditation';
+    }
+    // Sad / Melancholy
+    if (s < 0.3 || hasTag('sad') || hasTag('melancholy') || hasTag('gloomy') || hasTag('somber')) {
+      return 'Sad / Melancholy';
+    }
+    // Scary / Dark
+    if (hasTag('scary') || hasTag('dark') || hasTag('angry') || hasTag('frighten') || hasTag('tense')) {
+      return 'Scary / Dark';
+    }
+    // Rap / Hip-hop: genre or tags
+    if (genreHas('hip') || genreHas('rap') || genreHas('hip hop') || hasTag('rap') || hasTag('hip')) {
+      return 'Rap / Hip-hop';
+    }
+    // Party / Energetic: high tempo + high energy or party/dance tags
+    if (hasTag('party') || hasTag('dance') || hasTag('energetic') || hasTag('celebrat') ||
+        (tempoBpm >= 120 && energy >= 0.65)) {
+      return 'Party / Energetic';
+    }
+    // Workout: intense, driving, high energy + high tempo
+    if (hasTag('workout') || hasTag('intense') || hasTag('powerful') || hasTag('driving') ||
+        (tempoBpm >= 125 && energy >= 0.7)) {
+      return 'Workout';
+    }
+    // Romantic
+    if (hasTag('romantic') || hasTag('tender') || hasTag('love') || hasTag('passionate')) {
+      return 'Romantic';
+    }
+    // Upbeat / Happy
+    if (s >= 0.7 || hasTag('happy') || hasTag('joyful') || hasTag('upbeat') || hasTag('cheerful')) {
+      return s >= 0.85 ? 'Very Happy / Upbeat' : 'Upbeat / Happy';
+    }
+    // Focus / Study: moderate, calm tags
+    if (hasTag('focus') || hasTag('study') || (tempoBpm >= 80 && tempoBpm <= 110 && energy >= 0.3 && energy <= 0.6)) {
+      return 'Focus / Study';
+    }
+    // Calm (not sleeping)
+    if (s < 0.45 || hasTag('calm') || hasTag('relaxing') || hasTag('serene')) {
+      return 'Calm';
+    }
+    if (s < 0.55) return 'Neutral';
+    return _categorizeMood(s);
   }
 
   /// Calculate complexity
   double _calculateComplexity(SignalProcessingResults results) {
-    // Combine spectral features to estimate complexity
-    final spectralComplexity = (results.spectralCentroid / 8000.0) + 
-                              (results.spectralRolloff / 8000.0) + 
-                              results.zeroCrossingRate;
-    return math.min(1.0, spectralComplexity / 3.0);
+    // Combine spectral and temporal variation to estimate complexity
+    final spectralComplexity = (results.spectralCentroid / 8000.0) +
+        (results.spectralRolloff / 8000.0) +
+        results.zeroCrossingRate.clamp(0.0, 1.0) +
+        results.spectralFlux.clamp(0.0, 1.0);
+    return math.min(1.0, spectralComplexity / 4.0);
   }
 
-  /// Calculate valence (emotional positivity)
+  /// Calculate valence (emotional positivity, 0=sad/negative, 1=happy/positive).
   double _calculateValence(YAMNetResults yamnet, SignalProcessingResults signal) {
-    // Combine mood and energy for valence
-    return (yamnet.moodScore + (signal.overallEnergy * 0.5)) / 1.5;
+    final moodComponent = yamnet.moodScore.clamp(0.0, 1.0);
+    final energyComponent = (signal.overallEnergy.clamp(0.0, 1.0) * 0.4);
+    return (moodComponent * 0.7 + energyComponent).clamp(0.0, 1.0);
   }
 
-  /// Calculate arousal (emotional intensity)
+  /// Calculate arousal (emotional intensity / activation, 0=calm, 1=intense).
   double _calculateArousal(YAMNetResults yamnet, SignalProcessingResults signal) {
-    // Combine energy and tempo for arousal
-    return (yamnet.energy + (signal.tempoBpm / 200.0) + signal.overallEnergy) / 3.0;
+    final energyComponent = ((yamnet.energy + signal.overallEnergy) / 2.0).clamp(0.0, 1.0);
+    final tempoComponent = ((signal.tempoBpm.clamp(60.0, 200.0) - 60) / 140).clamp(0.0, 1.0);
+    return (energyComponent * 0.6 + tempoComponent * 0.4).clamp(0.0, 1.0);
   }
 
-  /// Calculate overall confidence
+  /// Calculate overall confidence (0-1) from YAMNet and signal agreement.
   double _calculateConfidence(YAMNetResults yamnet, SignalProcessingResults signal) {
-    return (yamnet.confidence + signal.confidence) / 2.0;
+    final yamnetConf = yamnet.confidence.clamp(0.0, 1.0);
+    final signalConf = signal.confidence.clamp(0.0, 1.0);
+    return ((yamnetConf + signalConf) / 2.0).clamp(0.0, 1.0);
   }
 
   /// Update statistics
@@ -1217,19 +1513,18 @@ class FeatureExtractor {
     return _yamnetLabels.map((label) => label.displayName).toList();
   }
 
-  /// Extract audio waveform for isolate processing
+  /// Extract audio waveform for isolate processing.
+  /// [duration] is the total song length; used to extract a ~0.975s segment from the middle for analysis.
   Future<Float32List?> extractAudioWaveform(String filePath, Duration duration) async {
     try {
       final tempDir = await getTemporaryDirectory();
       final outputPath = '${tempDir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.raw';
 
-      // Calculate optimal start time (middle of song)
       final startTime = _calculateMiddleStartTime(duration);
-
       _logger.d('🎵 Extracting audio: duration=${duration.inSeconds}s, start=${startTime.toStringAsFixed(1)}s');
 
-      // Build FFmpeg command
-      final command = _buildFFmpegCommand(filePath, outputPath);
+      // Build FFmpeg command with actual duration for accurate middle-segment extraction
+      final command = _buildFFmpegCommand(filePath, outputPath, totalDuration: duration);
 
       // Execute FFmpeg
       final session = await FFmpegKit.execute(command);
@@ -1276,6 +1571,152 @@ class FeatureExtractor {
     }
   }
 
+  // --- Isolate-safe static API for background processing (avoids UI lag) ---
+
+  /// Middle start time in seconds for a given total duration (pure function, safe for isolate).
+  static double calculateMiddleStartTimeSeconds(int durationMs) {
+    if (durationMs <= 0) return _calculateMiddleStartTimeStatic(const Duration(minutes: 3));
+    final totalSeconds = durationMs / 1000.0;
+    if (totalSeconds < 6) return 0.0;
+    if (totalSeconds < 15) return totalSeconds * 0.25;
+    if (totalSeconds < 60) return totalSeconds * 0.30;
+    if (totalSeconds < 600) return totalSeconds * 0.35;
+    if (totalSeconds < 1800) return totalSeconds * 0.25;
+    if (totalSeconds < 3600) return totalSeconds * 0.20;
+    return totalSeconds * 0.15;
+  }
+
+  static double _calculateMiddleStartTimeStatic(Duration duration) {
+    final totalSeconds = duration.inSeconds.toDouble();
+    if (totalSeconds < 6) return 0.0;
+    if (totalSeconds < 15) return totalSeconds * 0.25;
+    if (totalSeconds < 60) return totalSeconds * 0.30;
+    if (totalSeconds < 600) return totalSeconds * 0.35;
+    if (totalSeconds < 1800) return totalSeconds * 0.25;
+    if (totalSeconds < 3600) return totalSeconds * 0.20;
+    return totalSeconds * 0.15;
+  }
+
+  /// Start times (seconds) for 4-part analysis: middle of each quarter (D/8, 3D/8, 5D/8, 7D/8).
+  static List<double> getFourPartStartTimesSeconds(int durationMs) {
+    if (durationMs <= 0) return [];
+    final totalSec = durationMs / 1000.0;
+    if (totalSec < 4) return [totalSec * 0.5]; // too short: single middle point
+    return [
+      totalSec / 8,
+      totalSec * 3 / 8,
+      totalSec * 5 / 8,
+      totalSec * 7 / 8,
+    ];
+  }
+
+  /// Extract a single ~0.975s segment at [startTimeSeconds] (for 4-part analysis).
+  static Future<Float32List?> extractSegmentAtStartInIsolate(String filePath, double startTimeSeconds) async {
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final outputPath = '${tempDir.path}/audio_${DateTime.now().millisecondsSinceEpoch}_${startTimeSeconds.toStringAsFixed(1)}.raw';
+      final start = startTimeSeconds.clamp(0.0, double.infinity);
+      final command = [
+        '-y',
+        '-ss', start.toStringAsFixed(1),
+        '-i', '"$filePath"',
+        '-t', '0.975',
+        '-f', 's16le',
+        '-ar', '16000',
+        '-ac', '1',
+        '-avoid_negative_ts', 'make_zero',
+        '-fflags', '+genpts',
+        '"$outputPath"'
+      ].join(' ');
+
+      final session = await FFmpegKit.execute(command);
+      final returnCode = await session.getReturnCode();
+
+      if (ReturnCode.isSuccess(returnCode)) {
+        final rawFile = File(outputPath);
+        if (await rawFile.exists()) {
+          final rawBytes = await rawFile.readAsBytes();
+          await rawFile.delete();
+          if (rawBytes.isEmpty) return _fallbackWaveformInIsolate(filePath);
+          return _rawBytesToFloat32List(rawBytes);
+        }
+        return _fallbackWaveformInIsolate(filePath);
+      }
+      return _fallbackWaveformInIsolate(filePath);
+    } catch (_) {
+      return _fallbackWaveformInIsolate(filePath);
+    }
+  }
+
+  /// Extract audio in a background isolate to avoid blocking the UI.
+  /// Uses the same ~0.975s middle-segment logic; [durationMs] improves accuracy for real song length.
+  static Future<Float32List?> extractAudioInIsolate(String filePath, int durationMs) async {
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final outputPath = '${tempDir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.raw';
+      final startTime = calculateMiddleStartTimeSeconds(durationMs);
+      final command = [
+        '-y',
+        '-ss', startTime.toStringAsFixed(1),
+        '-i', '"$filePath"',
+        '-t', '0.975',
+        '-f', 's16le',
+        '-ar', '16000',
+        '-ac', '1',
+        '-avoid_negative_ts', 'make_zero',
+        '-fflags', '+genpts',
+        '"$outputPath"'
+      ].join(' ');
+
+      final session = await FFmpegKit.execute(command);
+      final returnCode = await session.getReturnCode();
+
+      if (ReturnCode.isSuccess(returnCode)) {
+        final rawFile = File(outputPath);
+        if (await rawFile.exists()) {
+          final rawBytes = await rawFile.readAsBytes();
+          await rawFile.delete();
+          if (rawBytes.isEmpty) return _fallbackWaveformInIsolate(filePath);
+          return _rawBytesToFloat32List(rawBytes);
+        }
+        return _fallbackWaveformInIsolate(filePath);
+      }
+      return _fallbackWaveformInIsolate(filePath);
+    } catch (_) {
+      return _fallbackWaveformInIsolate(filePath);
+    }
+  }
+
+  static Float32List _rawBytesToFloat32List(Uint8List rawBytes) {
+    final samples = rawBytes.length ~/ 2;
+    final waveform = Float32List(samples);
+    for (int i = 0; i < samples; i++) {
+      final byte1 = rawBytes[i * 2];
+      final byte2 = rawBytes[i * 2 + 1];
+      final sample = (byte2 << 8) | byte1;
+      final signedSample = sample > 32767 ? sample - 65536 : sample;
+      waveform[i] = signedSample / 32768.0;
+    }
+    return waveform;
+  }
+
+  static Future<Float32List?> _fallbackWaveformInIsolate(String filePath) async {
+    try {
+      final file = File(filePath);
+      final fileBytes = await file.readAsBytes();
+      const sampleRate = 16000;
+      const durationSec = 3;
+      final totalSamples = sampleRate * durationSec;
+      final waveform = Float32List(totalSamples);
+      for (int i = 0; i < totalSamples; i++) {
+        final byteIndex = i % fileBytes.length;
+        waveform[i] = (fileBytes[byteIndex] - 128) / 128.0 * 0.5;
+      }
+      return waveform;
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 
@@ -1331,6 +1772,7 @@ class SignalProcessingResults {
   final double overallEnergy;
   final double brightness;
   final double danceability;
+  final double loudness;
   final double confidence;
 
   SignalProcessingResults({
@@ -1345,6 +1787,7 @@ class SignalProcessingResults {
     required this.overallEnergy,
     required this.brightness,
     required this.danceability,
+    required this.loudness,
     required this.confidence,
   });
 
@@ -1361,6 +1804,7 @@ class SignalProcessingResults {
       overallEnergy: 0.0,
       brightness: 0.0,
       danceability: 0.0,
+      loudness: 0.0,
       confidence: 0.0,
     );
   }

@@ -28,6 +28,7 @@ abstract class ExtractedSongFeatures with _$ExtractedSongFeatures {
     required double signalEnergy, // Signal energy (0.0-1.0)
     required double brightness, // Spectral brightness
     required double danceability, // Danceability score (0.0-1.0)
+    required double loudness, // Perceived loudness (0.0-1.0, normalized)
     
     // Combined metrics
     required double overallEnergy, // Combined energy score

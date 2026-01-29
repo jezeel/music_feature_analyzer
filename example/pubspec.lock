@@ -276,11 +276,11 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: main
-      resolved-ref: "6cfa6bcac52a27898e2cd2eccbfc5d3b507e6b1f"
+      ref: "1.0.1-beta"
+      resolved-ref: "705cfadbe6ace02168e4c57aba73d5de19a67538"
       url: "https://github.com/jezeel/music_feature_analyzer.git"
     source: git
-    version: "1.0.1-beta-01"
+    version: "1.0.1-beta-07"
   path:
     dependency: transitive
     description:
