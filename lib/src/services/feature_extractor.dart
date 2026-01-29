@@ -1611,6 +1611,11 @@ class FeatureExtractor {
   }
 
   /// Extract a single ~0.975s segment at [startTimeSeconds] (for 4-part analysis).
+  /// Must be called from the main isolate (uses FFmpegKit platform channel).
+  static Future<Float32List?> extractSegmentAtStartOnMain(String filePath, double startTimeSeconds) async =>
+      extractSegmentAtStartInIsolate(filePath, startTimeSeconds);
+
+  /// Extract a single ~0.975s segment at [startTimeSeconds] (for 4-part analysis).
   static Future<Float32List?> extractSegmentAtStartInIsolate(String filePath, double startTimeSeconds) async {
     try {
       final tempDir = await getTemporaryDirectory();
@@ -1648,8 +1653,12 @@ class FeatureExtractor {
     }
   }
 
-  /// Extract audio in a background isolate to avoid blocking the UI.
+  /// Extract audio on the main isolate (uses FFmpegKit; call from main thread only).
   /// Uses the same ~0.975s middle-segment logic; [durationMs] improves accuracy for real song length.
+  static Future<Float32List?> extractAudioOnMain(String filePath, int durationMs) async =>
+      extractAudioInIsolate(filePath, durationMs);
+
+  /// Extract audio (FFmpeg-based). Must be called from main isolate - uses platform channel.
   static Future<Float32List?> extractAudioInIsolate(String filePath, int durationMs) async {
     try {
       final tempDir = await getTemporaryDirectory();

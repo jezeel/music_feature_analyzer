@@ -1252,6 +1252,7 @@ class MusicFeatureAnalyzer {
       } catch (e) {
         _logger.e('❌ Error processing song $filePath: $e');
         results[filePath] = null;
+        onSongUpdated?.call(filePath, null);
       }
     }
     
@@ -1259,11 +1260,11 @@ class MusicFeatureAnalyzer {
   }
 
   /// Extract features in isolate to prevent UI blocking.
-  /// Audio extraction runs inside the isolate so the main thread stays responsive.
+  /// Audio extraction runs on the MAIN isolate (FFmpegKit uses platform channels and cannot run inside compute).
+  /// Only YAMNet + signal processing run in the background isolate.
   /// [durationMs] improves middle-segment accuracy when provided (e.g. from metadata).
   static Future<ExtractedSongFeatures?> _extractFeaturesInIsolate(String filePath, {int? durationMs}) async {
     try {
-      // Only model bytes and labels are prepared on main thread (fast); audio is extracted in isolate
       final modelBytes = _extractor?.getModelBytes();
       final labels = _extractor?.getLabels();
       if (modelBytes == null || labels == null) {
@@ -1271,13 +1272,42 @@ class MusicFeatureAnalyzer {
         return null;
       }
 
+      final duration = durationMs ?? 0;
+      const minDurationForFourPartMs = 30000;
+      Float32List? preExtractedAudio;
+      List<Float32List>? preExtractedAudios;
+
+      if (duration >= minDurationForFourPartMs) {
+        final startTimes = FeatureExtractor.getFourPartStartTimesSeconds(duration);
+        if (startTimes.length >= 4) {
+          final segments = <Float32List>[];
+          for (final startSec in startTimes) {
+            final audio = await FeatureExtractor.extractSegmentAtStartOnMain(filePath, startSec);
+            if (audio != null) segments.add(audio);
+          }
+          if (segments.isNotEmpty) preExtractedAudios = segments;
+        }
+      }
+      if (preExtractedAudios == null) {
+        preExtractedAudio = await FeatureExtractor.extractAudioOnMain(filePath, duration);
+      }
+
+      final hasAudio = (preExtractedAudios != null && preExtractedAudios.isNotEmpty) ||
+          (preExtractedAudio != null);
+      if (!hasAudio) {
+        _logger.w('⚠️ No audio extracted for: ${_getFileName(filePath)}');
+        return null;
+      }
+
       final input = IsolateInputData(
         filePath: filePath,
-        durationMs: durationMs ?? 0,
+        durationMs: duration,
         yamnetModelBytes: modelBytes,
         yamnetLabels: labels,
         modelVersion: '1.0.0',
         fileName: _getFileName(filePath),
+        preExtractedAudio: preExtractedAudio,
+        preExtractedAudios: preExtractedAudios,
       );
       return await compute(_extractFeaturesInIsolateFull, input);
     } catch (e) {
@@ -1286,8 +1316,8 @@ class MusicFeatureAnalyzer {
     }
   }
 
-  /// Full isolate entry: extract audio inside isolate then run YAMNet + signal processing.
-  /// When duration >= 30s, uses 4-part analysis (4 equal segments, mean of features) for better accuracy.
+  /// Full isolate entry: run YAMNet + signal processing only. Audio must be pre-extracted on main (FFmpegKit cannot run in isolate).
+  /// When [input.preExtractedAudios] has 4 segments, uses 4-part analysis (mean of features). Otherwise uses [input.preExtractedAudio].
   static Future<ExtractedSongFeatures?> _extractFeaturesInIsolateFull(IsolateInputData input) async {
     try {
       final song = SongModel(
@@ -1299,37 +1329,32 @@ class MusicFeatureAnalyzer {
         filePath: input.filePath,
         features: null,
       );
-      const minDurationForFourPartMs = 30000; // 30 seconds
-      if (input.durationMs >= minDurationForFourPartMs) {
-        final startTimes = FeatureExtractor.getFourPartStartTimesSeconds(input.durationMs);
-        if (startTimes.length >= 4) {
-          final parts = <ExtractedSongFeatures>[];
-          for (final startSec in startTimes) {
-            final audioData = await FeatureExtractor.extractSegmentAtStartInIsolate(input.filePath, startSec);
-            if (audioData == null) continue;
-            final isolateData = IsolateFeatureData(
-              song: song,
-              yamnetModelBytes: input.yamnetModelBytes,
-              yamnetLabels: input.yamnetLabels,
-              modelVersion: input.modelVersion,
-              audioData: audioData,
-            );
-            final partFeatures = await _extractFeaturesInIsolateHelper(isolateData);
-            if (partFeatures != null) parts.add(partFeatures);
-          }
-          if (parts.isNotEmpty) return _combineFourPartFeatures(parts);
+      if (input.preExtractedAudios != null && input.preExtractedAudios!.isNotEmpty) {
+        final parts = <ExtractedSongFeatures>[];
+        for (final audioData in input.preExtractedAudios!) {
+          final isolateData = IsolateFeatureData(
+            song: song,
+            yamnetModelBytes: input.yamnetModelBytes,
+            yamnetLabels: input.yamnetLabels,
+            modelVersion: input.modelVersion,
+            audioData: audioData,
+          );
+          final partFeatures = await _extractFeaturesInIsolateHelper(isolateData);
+          if (partFeatures != null) parts.add(partFeatures);
         }
+        if (parts.isNotEmpty) return _combineFourPartFeatures(parts);
       }
-      // Single-segment fallback (or short song)
-      final audioData = await FeatureExtractor.extractAudioInIsolate(input.filePath, input.durationMs);
-      final isolateData = IsolateFeatureData(
-        song: song,
-        yamnetModelBytes: input.yamnetModelBytes,
-        yamnetLabels: input.yamnetLabels,
-        modelVersion: input.modelVersion,
-        audioData: audioData,
-      );
-      return await _extractFeaturesInIsolateHelper(isolateData);
+      if (input.preExtractedAudio != null) {
+        final isolateData = IsolateFeatureData(
+          song: song,
+          yamnetModelBytes: input.yamnetModelBytes,
+          yamnetLabels: input.yamnetLabels,
+          modelVersion: input.modelVersion,
+          audioData: input.preExtractedAudio,
+        );
+        return await _extractFeaturesInIsolateHelper(isolateData);
+      }
+      return null;
     } catch (_) {
       return null;
     }
@@ -1586,7 +1611,7 @@ class MusicFeatureAnalyzer {
 }
 
 /// Input for background isolate: file path, duration, and pre-loaded model/labels.
-/// Audio is extracted inside the isolate to avoid UI lag.
+/// Pre-extracted audio is passed from main isolate because FFmpegKit (platform channel) cannot run inside compute isolate.
 class IsolateInputData {
   final String filePath;
   final int durationMs;
@@ -1594,6 +1619,10 @@ class IsolateInputData {
   final List<String> yamnetLabels;
   final String modelVersion;
   final String fileName;
+  /// Single segment (used when duration < 30s or fallback). Extracted on main thread.
+  final Float32List? preExtractedAudio;
+  /// Four segments for 4-part analysis (duration >= 30s). Extracted on main thread.
+  final List<Float32List>? preExtractedAudios;
 
   const IsolateInputData({
     required this.filePath,
@@ -1602,6 +1631,8 @@ class IsolateInputData {
     required this.yamnetLabels,
     required this.modelVersion,
     required this.fileName,
+    this.preExtractedAudio,
+    this.preExtractedAudios,
   });
 }
 

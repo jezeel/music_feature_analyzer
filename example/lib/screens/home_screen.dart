@@ -251,16 +251,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     Row(
                       children: [
                         if (song.album.isNotEmpty) ...[
-                          Text(
-                            song.album,
-                            style: GoogleFonts.poppins(
-                              fontSize: 12.sp,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurface.withValues(alpha: 0.5),
+                          Expanded(
+                            child: Text(
+                              song.album,
+                              style: GoogleFonts.poppins(
+                                fontSize: 12.sp,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.5),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
                           SizedBox(width: 8.w),
                           Text(
