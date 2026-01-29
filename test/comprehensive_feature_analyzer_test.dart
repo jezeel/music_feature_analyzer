@@ -273,9 +273,9 @@ void main() {
         expect(MusicFeatureAnalyzer.getExtractionProgress, isA<Function>());
       });
 
-      test('4-part segment positions are available via FeatureExtractor', () {
-        final startTimes = FeatureExtractor.getFourPartStartTimesSeconds(120000); // 2 min
-        expect(startTimes.length, 4);
+      test('3-part segment positions are available via FeatureExtractor', () {
+        final startTimes = FeatureExtractor.getThreePartStartTimesSeconds(120000); // 2 min
+        expect(startTimes.length, 3);
         expect(startTimes.first, lessThan(startTimes.last));
       });
     });

@@ -1597,25 +1597,24 @@ class FeatureExtractor {
     return totalSeconds * 0.15;
   }
 
-  /// Start times (seconds) for 4-part analysis: middle of each quarter (D/8, 3D/8, 5D/8, 7D/8).
-  static List<double> getFourPartStartTimesSeconds(int durationMs) {
+  /// Start times (seconds) for 3-part analysis: middle of each third (D/6, D/2, 5D/6).
+  static List<double> getThreePartStartTimesSeconds(int durationMs) {
     if (durationMs <= 0) return [];
     final totalSec = durationMs / 1000.0;
     if (totalSec < 4) return [totalSec * 0.5]; // too short: single middle point
     return [
-      totalSec / 8,
-      totalSec * 3 / 8,
-      totalSec * 5 / 8,
-      totalSec * 7 / 8,
+      totalSec / 6,
+      totalSec / 2,
+      totalSec * 5 / 6,
     ];
   }
 
-  /// Extract a single ~0.975s segment at [startTimeSeconds] (for 4-part analysis).
+  /// Extract a single ~0.975s segment at [startTimeSeconds] (for 3-part analysis).
   /// Must be called from the main isolate (uses FFmpegKit platform channel).
   static Future<Float32List?> extractSegmentAtStartOnMain(String filePath, double startTimeSeconds) async =>
       extractSegmentAtStartInIsolate(filePath, startTimeSeconds);
 
-  /// Extract a single ~0.975s segment at [startTimeSeconds] (for 4-part analysis).
+  /// Extract a single ~0.975s segment at [startTimeSeconds] (for 3-part analysis).
   static Future<Float32List?> extractSegmentAtStartInIsolate(String filePath, double startTimeSeconds) async {
     try {
       final tempDir = await getTemporaryDirectory();

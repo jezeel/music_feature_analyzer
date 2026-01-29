@@ -1,50 +1,48 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:music_feature_analyzer/src/services/feature_extractor.dart';
 
-/// Tests for analysis behavior: 4-part segment positions and middle-segment start time.
+/// Tests for analysis behavior: 3-part segment positions and middle-segment start time.
 ///
 /// Covers:
-/// - [FeatureExtractor.getFourPartStartTimesSeconds] (4 equal parts: D/8, 3D/8, 5D/8, 7D/8)
+/// - [FeatureExtractor.getThreePartStartTimesSeconds] (3 equal parts: D/6, D/2, 5D/6)
 /// - [FeatureExtractor.calculateMiddleStartTimeSeconds] (single middle-segment position)
 /// - Edge cases: zero/negative duration, very short songs
 void main() {
-  group('FeatureExtractor - 4-part start times', () {
-    test('returns 4 start times for duration >= 4 seconds', () {
+  group('FeatureExtractor - 3-part start times', () {
+    test('returns 3 start times for duration >= 4 seconds', () {
       // 4 minutes = 240000 ms
-      final startTimes = FeatureExtractor.getFourPartStartTimesSeconds(240000);
-      expect(startTimes.length, 4);
+      final startTimes = FeatureExtractor.getThreePartStartTimesSeconds(240000);
+      expect(startTimes.length, 3);
       final totalSec = 240.0;
-      expect(startTimes[0], closeTo(totalSec / 8, 0.01));   // 30 s
-      expect(startTimes[1], closeTo(totalSec * 3 / 8, 0.01)); // 90 s
-      expect(startTimes[2], closeTo(totalSec * 5 / 8, 0.01)); // 150 s
-      expect(startTimes[3], closeTo(totalSec * 7 / 8, 0.01)); // 210 s
+      expect(startTimes[0], closeTo(totalSec / 6, 0.01));   // 40 s
+      expect(startTimes[1], closeTo(totalSec / 2, 0.01));   // 120 s
+      expect(startTimes[2], closeTo(totalSec * 5 / 6, 0.01)); // 200 s
     });
 
-    test('returns 4 start times for 30-second song (4-part threshold)', () {
-      final startTimes = FeatureExtractor.getFourPartStartTimesSeconds(30000);
-      expect(startTimes.length, 4);
-      expect(startTimes[0], closeTo(30 / 8, 0.01));
-      expect(startTimes[1], closeTo(30 * 3 / 8, 0.01));
-      expect(startTimes[2], closeTo(30 * 5 / 8, 0.01));
-      expect(startTimes[3], closeTo(30 * 7 / 8, 0.01));
+    test('returns 3 start times for 30-second song (3-part threshold)', () {
+      final startTimes = FeatureExtractor.getThreePartStartTimesSeconds(30000);
+      expect(startTimes.length, 3);
+      expect(startTimes[0], closeTo(30 / 6, 0.01));
+      expect(startTimes[1], closeTo(30 / 2, 0.01));
+      expect(startTimes[2], closeTo(30 * 5 / 6, 0.01));
     });
 
     test('returns 1 start time for very short song (< 4 s)', () {
-      final startTimes = FeatureExtractor.getFourPartStartTimesSeconds(2000); // 2 s
+      final startTimes = FeatureExtractor.getThreePartStartTimesSeconds(2000); // 2 s
       expect(startTimes.length, 1);
       expect(startTimes[0], closeTo(1.0, 0.01)); // middle: 2 * 0.5
     });
 
     test('returns empty list for zero or negative duration', () {
-      expect(FeatureExtractor.getFourPartStartTimesSeconds(0), isEmpty);
-      expect(FeatureExtractor.getFourPartStartTimesSeconds(-100), isEmpty);
+      expect(FeatureExtractor.getThreePartStartTimesSeconds(0), isEmpty);
+      expect(FeatureExtractor.getThreePartStartTimesSeconds(-100), isEmpty);
     });
 
     test('start times are strictly increasing and within [0, duration]', () {
       const durationMs = 180000; // 3 min
-      final startTimes = FeatureExtractor.getFourPartStartTimesSeconds(durationMs);
+      final startTimes = FeatureExtractor.getThreePartStartTimesSeconds(durationMs);
       final totalSec = durationMs / 1000.0;
-      expect(startTimes.length, 4);
+      expect(startTimes.length, 3);
       for (var i = 0; i < startTimes.length; i++) {
         expect(startTimes[i], greaterThanOrEqualTo(0));
         expect(startTimes[i], lessThanOrEqualTo(totalSec));

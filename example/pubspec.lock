@@ -277,7 +277,7 @@ packages:
     description:
       path: "."
       ref: "1.0.1-beta"
-      resolved-ref: c172bed5f6fc6c51a49dcc5607817f7182d0cbb5
+      resolved-ref: dc78326953609d7e7c43b0845f0c65f6c81e36f8
       url: "https://github.com/jezeel/music_feature_analyzer.git"
     source: git
     version: "1.0.1-beta-07"

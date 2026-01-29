@@ -1232,7 +1232,7 @@ class MusicFeatureAnalyzer {
         
         _logger.i('🎵 Processing song ${i + 1}/${filePaths.length}: $filePath');
         
-        // Use isolate for heavy processing (audio + 4-part analysis when duration available)
+        // Use isolate for heavy processing (audio + 3-part analysis when duration available)
         final features = await _extractFeaturesInIsolate(filePath, durationMs: durationMs);
         
         results[filePath] = features;
@@ -1273,13 +1273,13 @@ class MusicFeatureAnalyzer {
       }
 
       final duration = durationMs ?? 0;
-      const minDurationForFourPartMs = 30000;
+      const minDurationForThreePartMs = 30000;
       Float32List? preExtractedAudio;
       List<Float32List>? preExtractedAudios;
 
-      if (duration >= minDurationForFourPartMs) {
-        final startTimes = FeatureExtractor.getFourPartStartTimesSeconds(duration);
-        if (startTimes.length >= 4) {
+      if (duration >= minDurationForThreePartMs) {
+        final startTimes = FeatureExtractor.getThreePartStartTimesSeconds(duration);
+        if (startTimes.length >= 3) {
           final segments = <Float32List>[];
           for (final startSec in startTimes) {
             final audio = await FeatureExtractor.extractSegmentAtStartOnMain(filePath, startSec);
@@ -1317,7 +1317,8 @@ class MusicFeatureAnalyzer {
   }
 
   /// Full isolate entry: run YAMNet + signal processing only. Audio must be pre-extracted on main (FFmpegKit cannot run in isolate).
-  /// When [input.preExtractedAudios] has 4 segments, uses 4-part analysis (mean of features). Otherwise uses [input.preExtractedAudio].
+  /// When [input.preExtractedAudios] has segments, uses 3-part analysis (mean of features). Otherwise uses [input.preExtractedAudio].
+  /// Uses a single interpreter for all segments to avoid native resource exhaustion.
   static Future<ExtractedSongFeatures?> _extractFeaturesInIsolateFull(IsolateInputData input) async {
     try {
       final song = SongModel(
@@ -1330,19 +1331,26 @@ class MusicFeatureAnalyzer {
         features: null,
       );
       if (input.preExtractedAudios != null && input.preExtractedAudios!.isNotEmpty) {
-        final parts = <ExtractedSongFeatures>[];
-        for (final audioData in input.preExtractedAudios!) {
-          final isolateData = IsolateFeatureData(
-            song: song,
-            yamnetModelBytes: input.yamnetModelBytes,
-            yamnetLabels: input.yamnetLabels,
-            modelVersion: input.modelVersion,
-            audioData: audioData,
-          );
-          final partFeatures = await _extractFeaturesInIsolateHelper(isolateData);
-          if (partFeatures != null) parts.add(partFeatures);
+        // Single interpreter for all segments to avoid "Computation ended without result"
+        Interpreter? interpreter;
+        try {
+          interpreter = Interpreter.fromBuffer(input.yamnetModelBytes);
+          final parts = <ExtractedSongFeatures>[];
+          const segmentTimeout = Duration(seconds: 60);
+          for (final audioData in input.preExtractedAudios!) {
+            final partFeatures = await _extractFeaturesWithPreloadedData(
+              song,
+              interpreter,
+              input.yamnetLabels,
+              input.modelVersion,
+              audioData,
+            ).timeout(segmentTimeout, onTimeout: () => null);
+            if (partFeatures != null) parts.add(partFeatures);
+          }
+          if (parts.isNotEmpty) return _combineMultiPartFeatures(parts);
+        } finally {
+          interpreter?.close();
         }
-        if (parts.isNotEmpty) return _combineFourPartFeatures(parts);
       }
       if (input.preExtractedAudio != null) {
         final isolateData = IsolateFeatureData(
@@ -1352,7 +1360,8 @@ class MusicFeatureAnalyzer {
           modelVersion: input.modelVersion,
           audioData: input.preExtractedAudio,
         );
-        return await _extractFeaturesInIsolateHelper(isolateData);
+        return await _extractFeaturesInIsolateHelper(isolateData)
+            .timeout(const Duration(seconds: 60), onTimeout: () => null);
       }
       return null;
     } catch (_) {
@@ -1360,8 +1369,8 @@ class MusicFeatureAnalyzer {
     }
   }
 
-  /// Combine 4 segment results: mean for numeric fields, merge/dedupe lists, pick categorical from max-confidence segment.
-  static ExtractedSongFeatures _combineFourPartFeatures(List<ExtractedSongFeatures> parts) {
+  /// Combine multi-part (e.g. 3-part) segment results: mean for numeric fields, merge/dedupe lists, pick categorical from max-confidence segment.
+  static ExtractedSongFeatures _combineMultiPartFeatures(List<ExtractedSongFeatures> parts) {
     if (parts.length == 1) return parts.first;
     final n = parts.length;
     double mean(Iterable<double> values) => values.reduce((a, b) => a + b) / n;
@@ -1409,27 +1418,23 @@ class MusicFeatureAnalyzer {
     );
   }
 
-  /// Helper function for isolate processing with pre-loaded data
+  /// Helper function for isolate processing with pre-loaded data.
+  /// Interpreter is always closed in finally to avoid native resource leaks.
   static Future<ExtractedSongFeatures?> _extractFeaturesInIsolateHelper(IsolateFeatureData data) async {
+    Interpreter? interpreter;
     try {
-      // Initialize TFLite interpreter with pre-loaded model bytes
-      final interpreter = Interpreter.fromBuffer(data.yamnetModelBytes);
-      
-      // Extract features using the pre-loaded data
-      final features = await _extractFeaturesWithPreloadedData(
+      interpreter = Interpreter.fromBuffer(data.yamnetModelBytes);
+      return await _extractFeaturesWithPreloadedData(
         data.song,
         interpreter,
         data.yamnetLabels,
         data.modelVersion,
         data.audioData,
       );
-      
-      // Close interpreter
-      interpreter.close();
-      
-      return features;
-    } catch (e) {
+    } catch (_) {
       return null;
+    } finally {
+      interpreter?.close();
     }
   }
 
@@ -1621,7 +1626,7 @@ class IsolateInputData {
   final String fileName;
   /// Single segment (used when duration < 30s or fallback). Extracted on main thread.
   final Float32List? preExtractedAudio;
-  /// Four segments for 4-part analysis (duration >= 30s). Extracted on main thread.
+  /// Multiple segments for 3-part analysis (duration >= 30s). Extracted on main thread.
   final List<Float32List>? preExtractedAudios;
 
   const IsolateInputData({

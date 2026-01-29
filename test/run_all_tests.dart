@@ -16,7 +16,7 @@ void main() {
         'Model classes (SongModel, ExtractedSongFeatures, AnalysisStats)',
         'Feature extraction algorithms',
         'Background processing with isolates',
-        'Duration auto-fill from metadata and 4-part analysis',
+        'Duration auto-fill from metadata and 3-part analysis',
         'Progress tracking and callbacks',
         'UI responsiveness',
         'Error handling and fallback mechanisms',
@@ -25,14 +25,14 @@ void main() {
         'Performance and load testing',
         'Integration testing',
         'Edge case handling',
-        '4-part segment positions and middle-segment start time',
+        '3-part segment positions and middle-segment start time',
       ];
       expect(testAreas.length, greaterThanOrEqualTo(12));
       expect(testAreas, contains('Package initialization and API'));
       expect(testAreas, contains('Signal processing methods'));
       expect(testAreas, contains('Background processing with isolates'));
-      expect(testAreas, contains('Duration auto-fill from metadata and 4-part analysis'));
-      expect(testAreas, contains('4-part segment positions and middle-segment start time'));
+      expect(testAreas, contains('Duration auto-fill from metadata and 3-part analysis'));
+      expect(testAreas, contains('3-part segment positions and middle-segment start time'));
     });
   });
 }
