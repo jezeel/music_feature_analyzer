@@ -88,8 +88,10 @@ public class MusicFeatureAnalyzerPlugin: NSObject, FlutterPlugin {
             let common = extractCommonMetadata(from: asset)
             metadata.merge(sanitizeMetadata(common)) { _, new in new }
 
+            // estimatedDataRate is in bits/sec; convert to kbps for Dart contract
             if let track = asset.tracks(withMediaType: .audio).first {
-                metadata["bitrate"] = Int(track.estimatedDataRate)
+                let bps = track.estimatedDataRate
+                metadata["bitrate"] = bps > 0 ? Int(bps / 1000) : nil
             }
 
             metadata["mimeType"] = self.getMimeTypeFromExtension(filePath: filePath)

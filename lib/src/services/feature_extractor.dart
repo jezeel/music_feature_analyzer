@@ -1609,6 +1609,52 @@ class FeatureExtractor {
     ];
   }
 
+  /// Extract all 3 segments in one FFmpeg run (faster than 3 separate runs).
+  /// Must be called from the main isolate (uses FFmpegKit platform channel).
+  /// Returns list of 3 Float32List or empty on failure; falls back to null to use single-segment path.
+  static Future<List<Float32List>?> extractThreeSegmentsBatchOnMain(String filePath, List<double> startTimes) async {
+    if (startTimes.length < 3) return null;
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final base = tempDir.path;
+      final epoch = DateTime.now().millisecondsSinceEpoch;
+      final out1 = '$base/seg_${epoch}_1.raw';
+      final out2 = '$base/seg_${epoch}_2.raw';
+      final out3 = '$base/seg_${epoch}_3.raw';
+      const dur = 0.975;
+      final s1 = startTimes[0].clamp(0.0, double.infinity);
+      final s2 = startTimes[1].clamp(0.0, double.infinity);
+      final s3 = startTimes[2].clamp(0.0, double.infinity);
+      final e1 = s1 + dur;
+      final e2 = s2 + dur;
+      final e3 = s3 + dur;
+      // One FFmpeg run: single decode, 3 atrim filters, 3 outputs (much faster than 3 separate runs).
+      final filter = '[0:a]atrim=${s1.toStringAsFixed(3)}:${e1.toStringAsFixed(3)},aresample=16000,aformat=sample_fmts=s16[o1];'
+          '[0:a]atrim=${s2.toStringAsFixed(3)}:${e2.toStringAsFixed(3)},aresample=16000,aformat=sample_fmts=s16[o2];'
+          '[0:a]atrim=${s3.toStringAsFixed(3)}:${e3.toStringAsFixed(3)},aresample=16000,aformat=sample_fmts=s16[o3]';
+      final command = '-y -i "$filePath" -filter_complex "$filter" -map "[o1]" "$out1" -map "[o2]" "$out2" -map "[o3]" "$out3"';
+      final session = await FFmpegKit.execute(command);
+      final returnCode = await session.getReturnCode();
+      if (!ReturnCode.isSuccess(returnCode)) return null;
+      final f1 = File(out1);
+      final f2 = File(out2);
+      final f3 = File(out3);
+      if (!await f1.exists() || !await f2.exists() || !await f3.exists()) return null;
+      final b1 = await f1.readAsBytes();
+      final b2 = await f2.readAsBytes();
+      final b3 = await f3.readAsBytes();
+      await f1.delete();
+      await f2.delete();
+      await f3.delete();
+      final w1 = _rawBytesToFloat32List(b1);
+      final w2 = _rawBytesToFloat32List(b2);
+      final w3 = _rawBytesToFloat32List(b3);
+      return [w1, w2, w3];
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Extract a single ~0.975s segment at [startTimeSeconds] (for 3-part analysis).
   /// Must be called from the main isolate (uses FFmpegKit platform channel).
   static Future<Float32List?> extractSegmentAtStartOnMain(String filePath, double startTimeSeconds) async =>

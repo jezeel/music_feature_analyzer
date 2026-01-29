@@ -2,7 +2,7 @@
 
 ## Use from pub.dev (recommended)
 
-Add the package from **pub.dev** in your `pubspec.yaml`:
+**Use this for normal apps.** Add the package from **pub.dev** in your `pubspec.yaml`:
 
 ```yaml
 dependencies:
@@ -21,7 +21,7 @@ No extra setup is needed. The plugin registers automatically.
 
 ## Use from Git (testing only)
 
-For **testing or development only**, you can depend on the **main** branch from Git:
+For **testing or development only** (e.g. to try unreleased fixes), you can depend on the **main** branch from Git:
 
 ```yaml
 dependencies:

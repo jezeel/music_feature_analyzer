@@ -180,10 +180,11 @@ class MusicFeatureAnalyzer {
   }
 
   /// Extract features in background with isolate-based processing.
-  /// 
-  /// Audio extraction and AI/signal processing run in a separate isolate so the UI stays responsive.
-  /// Pass [durationMsByPath] when you have song durations (e.g. from metadata) for more accurate
-  /// middle-segment extraction (e.g. for 3–4 minute songs).
+  ///
+  /// Runs in a separate isolate so the UI stays responsive; each song can take several seconds.
+  /// [durationMsByPath] is optional: when null, duration is auto-fetched from file metadata for each path
+  /// (so you do not need to pass it). Pass it only when you already have durations (e.g. from your own metadata)
+  /// to avoid an extra metadata read per file.
   static Future<Map<String, ExtractedSongFeatures?>> extractFeaturesInBackground(
     List<String> filePaths, {
     Map<String, int>? durationMsByPath,
@@ -583,11 +584,12 @@ class MusicFeatureAnalyzer {
       String genre = 'Unknown';
       double energy = 0.5;
       final moodTags = <String>[];
-      
+      double moodScore = 0.5;
+
       for (final prediction in topPredictions) {
         final label = labels[prediction.key];
         final score = prediction.value;
-        
+
         if (score > 0.1) { // Threshold for relevance
           if (_isInstrument(label)) {
             instruments.add(label);
@@ -599,14 +601,15 @@ class MusicFeatureAnalyzer {
             genre = label;
           }
           if (_isMood(label)) {
-            moodTags.add(label);
+            if (moodTags.length < 3 && score > 0.15) moodTags.add(label);
+            moodScore = _moodTagToScoreInIsolate(label, score, moodScore);
           }
         }
       }
-      
+
       // Calculate energy from results
       energy = results.take(100).reduce((a, b) => a + b) / 100;
-      
+
       final vocalIntensity = hasVocals ? energy.clamp(0.0, 1.0) : 0.0;
       return {
         'instruments': instruments.isEmpty ? ['Unknown'] : instruments,
@@ -614,6 +617,7 @@ class MusicFeatureAnalyzer {
         'genre': genre.isEmpty ? 'Unknown' : genre,
         'mood': moodTags.isEmpty ? 'Neutral' : moodTags.first,
         'moodTags': moodTags.isEmpty ? ['Neutral'] : moodTags,
+        'moodScore': moodScore.clamp(0.0, 1.0),
         'energyValue': energy.clamp(0.0, 1.0),
         'vocalIntensity': vocalIntensity,
       };
@@ -624,10 +628,49 @@ class MusicFeatureAnalyzer {
         'genre': 'Unknown',
         'mood': 'Neutral',
         'moodTags': ['Neutral'],
+        'moodScore': 0.5,
         'energyValue': 0.5,
         'vocalIntensity': 0.0,
       };
     }
+  }
+
+  /// Map mood tag to numeric score (0=sad/calm, 1=happy/energetic). Mirrors FeatureExtractor._moodTagToScore.
+  static double _moodTagToScoreInIsolate(String displayName, double score, double current) {
+    final lower = displayName.toLowerCase();
+    final weighted = score.clamp(0.0, 1.0);
+    if (lower.contains('happy') || lower.contains('joyful') || lower.contains('upbeat') ||
+        lower.contains('cheerful') || lower.contains('exciting') || lower.contains('party') ||
+        lower.contains('celebrat') || lower.contains('dance') || lower.contains('energetic')) {
+      return math.max(current, 0.5 + weighted * 0.45);
+    }
+    if (lower.contains('romantic') || lower.contains('tender') || lower.contains('love') || lower.contains('passionate')) {
+      return math.max(current, 0.55 + weighted * 0.35);
+    }
+    if (lower.contains('workout') || lower.contains('intense') || lower.contains('powerful') || lower.contains('driving')) {
+      return math.max(current, 0.6 + weighted * 0.35);
+    }
+    if (lower.contains('sad') || lower.contains('melancholy') || lower.contains('gloomy') ||
+        lower.contains('somber') || lower.contains('depress') || lower.contains('heartbreak')) {
+      return math.min(current, 0.35 - weighted * 0.35);
+    }
+    if (lower.contains('scary') || lower.contains('dark') || lower.contains('angry') || lower.contains('aggressive') ||
+        lower.contains('frighten') || lower.contains('tense')) {
+      return math.min(current, 0.4 - weighted * 0.2);
+    }
+    if (lower.contains('calm') || lower.contains('peaceful') || lower.contains('relaxing') ||
+        lower.contains('serene') || lower.contains('chill') || lower.contains('lullaby') ||
+        lower.contains('sleep') || lower.contains('meditation') || lower.contains('zen') ||
+        lower.contains('ambient') || lower.contains('soothing')) {
+      return (current + 0.45) / 2;
+    }
+    if (lower.contains('focus') || lower.contains('study') || lower.contains('concentration')) {
+      return (current + 0.5) / 2;
+    }
+    if (lower.contains('rap') || lower.contains('hip') || lower.contains('hip hop')) {
+      return math.max(current, 0.45 + weighted * 0.4);
+    }
+    return current;
   }
 
   static String _genreFromMap(dynamic g) {
@@ -1173,13 +1216,16 @@ class MusicFeatureAnalyzer {
     return 'Neutral';
   }
 
-  /// Advanced mood category in isolate: Chill/Sleeping, Party/Energetic, Rap/Hip-hop, etc.
+  /// Advanced mood category in isolate: Chill/Sleeping, Party/Energetic, Rap/Hip-hop, Very Happy/Upbeat, etc.
+  /// [moodScore] when non-null enables "Very Happy / Upbeat" vs "Upbeat / Happy" and Sad/Calm/Neutral from score.
   static String _computeMoodCategoryInIsolate(
     List<String> moodTags,
     String genre,
     double tempoBpm,
-    double energy,
-  ) {
+    double energy, [
+    double? moodScore,
+  ]) {
+    final s = (moodScore ?? 0.5).clamp(0.0, 1.0);
     final genreLower = genre.toLowerCase();
     final tagsLower = moodTags.map((t) => t.toLowerCase()).toList();
     bool hasTag(String sub) => tagsLower.any((t) => t.contains(sub));
@@ -1187,15 +1233,18 @@ class MusicFeatureAnalyzer {
 
     if (hasTag('lullaby') || hasTag('sleep') || hasTag('chill') || hasTag('ambient') || hasTag('soothing') || (tempoBpm < 85 && energy < 0.35)) return 'Chill / Sleeping';
     if (hasTag('meditation') || hasTag('zen') || hasTag('peaceful') || (energy < 0.25 && tempoBpm < 90)) return 'Meditation';
-    if (hasTag('sad') || hasTag('melancholy') || hasTag('gloomy') || hasTag('somber')) return 'Sad / Melancholy';
+    if (s < 0.3 || hasTag('sad') || hasTag('melancholy') || hasTag('gloomy') || hasTag('somber')) return 'Sad / Melancholy';
     if (hasTag('scary') || hasTag('dark') || hasTag('angry') || hasTag('frighten') || hasTag('tense')) return 'Scary / Dark';
     if (genreHas('hip') || genreHas('rap') || hasTag('rap') || hasTag('hip')) return 'Rap / Hip-hop';
     if (hasTag('party') || hasTag('dance') || hasTag('energetic') || hasTag('celebrat') || (tempoBpm >= 120 && energy >= 0.65)) return 'Party / Energetic';
     if (hasTag('workout') || hasTag('intense') || hasTag('powerful') || hasTag('driving') || (tempoBpm >= 125 && energy >= 0.7)) return 'Workout';
     if (hasTag('romantic') || hasTag('tender') || hasTag('love') || hasTag('passionate')) return 'Romantic';
-    if (hasTag('happy') || hasTag('joyful') || hasTag('upbeat') || hasTag('cheerful')) return 'Upbeat / Happy';
+    if (s >= 0.7 || hasTag('happy') || hasTag('joyful') || hasTag('upbeat') || hasTag('cheerful')) {
+      return s >= 0.85 ? 'Very Happy / Upbeat' : 'Upbeat / Happy';
+    }
     if (hasTag('focus') || hasTag('study') || (tempoBpm >= 80 && tempoBpm <= 110 && energy >= 0.3 && energy <= 0.6)) return 'Focus / Study';
-    if (hasTag('calm') || hasTag('relaxing') || hasTag('serene')) return 'Calm';
+    if (s < 0.45 || hasTag('calm') || hasTag('relaxing') || hasTag('serene')) return 'Calm';
+    if (s < 0.55) return 'Neutral';
     return _categorizeMoodInIsolate(moodTags);
   }
 
@@ -1280,10 +1329,14 @@ class MusicFeatureAnalyzer {
       if (duration >= minDurationForThreePartMs) {
         final startTimes = FeatureExtractor.getThreePartStartTimesSeconds(duration);
         if (startTimes.length >= 3) {
-          final segments = <Float32List>[];
-          for (final startSec in startTimes) {
-            final audio = await FeatureExtractor.extractSegmentAtStartOnMain(filePath, startSec);
-            if (audio != null) segments.add(audio);
+          // Prefer single FFmpeg run for 3 segments (faster than 3 separate runs)
+          List<Float32List>? segments = await FeatureExtractor.extractThreeSegmentsBatchOnMain(filePath, startTimes);
+          if (segments == null || segments.length < 3) {
+            segments = <Float32List>[];
+            for (final startSec in startTimes) {
+              final audio = await FeatureExtractor.extractSegmentAtStartOnMain(filePath, startSec);
+              if (audio != null) segments.add(audio);
+            }
           }
           if (segments.isNotEmpty) preExtractedAudios = segments;
         }
@@ -1483,7 +1536,13 @@ class MusicFeatureAnalyzer {
         energy: _categorizeEnergyInIsolate(signalFeatures.energy),
         instruments: yamnetFeatures['instruments'] as List<String>,
         vocals: yamnetFeatures['hasVocals'] as bool ? _categorizeVocalsInIsolate((yamnetFeatures['vocalIntensity'] as num?)?.toDouble() ?? yamnetEnergyVal) : null,
-        mood: _computeMoodCategoryInIsolate(moodTagsList, _genreFromMap(yamnetFeatures['genre']), signalFeatures.tempoBpm, signalEnergyVal),
+        mood: _computeMoodCategoryInIsolate(
+          moodTagsList,
+          _genreFromMap(yamnetFeatures['genre']),
+          signalFeatures.tempoBpm,
+          signalEnergyVal,
+          (yamnetFeatures['moodScore'] as num?)?.toDouble(),
+        ),
         yamnetInstruments: yamnetFeatures['instruments'] as List<String>,
         hasVocals: yamnetFeatures['hasVocals'] as bool,
         estimatedGenre: _genreFromMap(yamnetFeatures['genre']),

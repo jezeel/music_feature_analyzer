@@ -154,8 +154,10 @@ class MusicFeatureAnalyzerPlugin : FlutterPlugin, MethodCallHandler {
                 val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
                 metadata["duration"] = durationStr?.toLongOrNull()
 
+                // METADATA_KEY_BITRATE is in bits/sec; convert to kbps for Dart contract
                 val bitrateStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)
-                metadata["bitrate"] = bitrateStr?.toIntOrNull()
+                val bps = bitrateStr?.toLongOrNull()
+                metadata["bitrate"] = if (bps != null && bps > 0) (bps / 1000).toInt() else null
 
                 val mimeType = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE)
                 metadata["mimeType"] = if (mimeType != null && mimeType != "null" && mimeType.isNotEmpty()) {

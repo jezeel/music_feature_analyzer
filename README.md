@@ -124,8 +124,8 @@ await MusicFeatureAnalyzer.dispose();
 ## How analysis works
 
 - **Short / no duration:** One ~0.975 s segment from the middle.
-- **Duration ≥ 30 s:** Four segments (1/8, 3/8, 5/8, 7/8 of length); numeric features = mean, genre/mood = from highest-confidence segment.
-- **Background:** Duration is taken from metadata when `durationMsByPath` is omitted; extraction runs in an isolate so the UI stays responsive.
+- **Duration ≥ 30 s:** Three segments (middle of each third); numeric features = mean, genre/mood = from highest-confidence segment.
+- **Background:** `extractFeaturesInBackground` runs in a separate isolate so the UI stays responsive; each song can take several seconds. Duration is taken from file metadata when `durationMsByPath` is omitted.
 
 ---
 
