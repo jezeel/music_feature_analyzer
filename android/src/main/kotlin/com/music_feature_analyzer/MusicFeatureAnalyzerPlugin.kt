@@ -138,6 +138,8 @@ class MusicFeatureAnalyzerPlugin : FlutterPlugin, MethodCallHandler {
                 
                 val year = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)
                 metadata["year"] = if (year == null || year == "null") null else year
+                val date = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DATE)
+                metadata["date"] = if (date == null || date == "null") null else date
                 
                 val composer = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_COMPOSER)
                 metadata["composer"] = if (composer == null || composer == "null") null else composer

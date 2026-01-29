@@ -232,6 +232,12 @@ class MetadataExtractor {
       final composer = MetadataUtils.cleanString(metadata?.composer);
       final writer = MetadataUtils.cleanString(metadata?.writer);
 
+      // Normalize bitrate: platform may return bps (e.g. 160000); contract is kbps (160)
+      int? bitrateKbps = metadata?.bitrate;
+      if (bitrateKbps != null && bitrateKbps > 1000) {
+        bitrateKbps = bitrateKbps ~/ 1000;
+      }
+
       // Validate and sanitize all extracted values
       final validatedData = _validateAndSanitizeMetadata(
         id: id,
@@ -248,7 +254,7 @@ class MetadataExtractor {
         albumArtist: albumArtist,
         composer: composer,
         writer: writer,
-        bitrate: metadata?.bitrate,
+        bitrate: bitrateKbps,
         fileSize: fileSize,
         mimeType: mimeType,
         dateAdded: dateAdded,

@@ -9,6 +9,7 @@ class AudioMetadata {
   final String? albumArtist;
   final String? genre;
   final String? year;
+  final String? date;
   final String? composer;
   final String? writer;
   final String? trackNumber;
@@ -26,6 +27,7 @@ class AudioMetadata {
     this.albumArtist,
     this.genre,
     this.year,
+    this.date,
     this.composer,
     this.writer,
     this.trackNumber,
@@ -37,6 +39,19 @@ class AudioMetadata {
     this.fileSize,
   });
 
+  /// Normalize bitrate to kbps; platform may return bits/sec (e.g. 160000 -> 160).
+  static int? _normalizeBitrateToKbps(dynamic raw) {
+    int? value;
+    if (raw is int) {
+      value = raw;
+    } else if (raw is String) {
+      value = int.tryParse(raw);
+    }
+    if (value == null || value <= 0) return null;
+    if (value > 1000) return value ~/ 1000;
+    return value;
+  }
+
   factory AudioMetadata.fromMap(Map<dynamic, dynamic> map) {
     return AudioMetadata(
       title: map['title'] as String?,
@@ -45,6 +60,7 @@ class AudioMetadata {
       albumArtist: map['albumArtist'] as String?,
       genre: map['genre'] as String?,
       year: map['year'] as String?,
+      date: map['date'] as String?,
       composer: map['composer'] as String?,
       writer: map['writer'] as String?,
       trackNumber: map['trackNumber']?.toString(),
@@ -56,9 +72,8 @@ class AudioMetadata {
                 : (map['duration'] is double
                       ? (map['duration'] as double).toInt()
                       : null)),
-      bitrate: map['bitrate'] is int
-          ? map['bitrate'] as int
-          : (map['bitrate'] is String ? int.tryParse(map['bitrate'] as String) : null),
+      // Normalize bitrate to kbps (platform may return bps)
+      bitrate: _normalizeBitrateToKbps(map['bitrate']),
       mimeType: map['mimeType'] as String?,
       hasAlbumArt: map['hasAlbumArt'] as bool? ?? false,
       fileSize: map['fileSize'] as int?,

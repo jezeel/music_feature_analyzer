@@ -126,7 +126,10 @@ public class MusicFeatureAnalyzerPlugin: NSObject, FlutterPlugin {
                 metadata["genre"] = value
             case AVMetadataKey.commonKeyCreationDate.rawValue,
                  AVMetadataKey.id3MetadataKeyYear.rawValue:
-                if let yearString = value { metadata["year"] = extractYearFromString(yearString) }
+                if let yearString = value {
+                    metadata["year"] = extractYearFromString(yearString)
+                    metadata["date"] = yearString
+                }
             case AVMetadataKey.commonKeyCreator.rawValue,
                  AVMetadataKey.id3MetadataKeyComposer.rawValue:
                 metadata["composer"] = value

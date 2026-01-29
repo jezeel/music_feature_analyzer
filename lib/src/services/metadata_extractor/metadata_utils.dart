@@ -219,21 +219,23 @@ class MetadataUtils {
     );
   }
 
-  /// Extract year from metadata
+  /// Extract year from metadata (tries [year] first, then [date] as fallback).
   static int? extractYearSafely(AudioMetadata? metadata) {
     return SharedValidation.extractSafely(
       () {
-        if (metadata?.year == null) return null;
-        // Handle varying formats of year (e.g. "2023", "2023-01-01")
-        final yearStr = metadata!.year!.trim();
-        final yearMatch = RegExp(r'\d{4}').firstMatch(yearStr);
-        if (yearMatch != null) {
+        final now = DateTime.now();
+        final maxYear = now.year + 1;
+        int? tryParseYear(String? str) {
+          if (str == null || str.trim().isEmpty) return null;
+          final yearMatch = RegExp(r'\d{4}').firstMatch(str.trim());
+          if (yearMatch == null) return null;
           final year = int.tryParse(yearMatch.group(0)!);
-          if (year != null && year > 1900 && year <= DateTime.now().year + 1) {
-            return year;
-          }
+          if (year != null && year > 1900 && year <= maxYear) return year;
+          return null;
         }
-        return null;
+        final fromYear = tryParseYear(metadata?.year);
+        if (fromYear != null) return fromYear;
+        return tryParseYear(metadata?.date);
       },
       null,
       'year',
