@@ -1,21 +1,13 @@
 name: music_feature_analyzer
 description: A comprehensive music feature analysis package using YAMNet AI and signal processing.
-version: 1.0.1-beta-06
+version: 1.0.1-beta-07
 
 homepage: https://github.com/jezeel/music_feature_analyzer
 repository: https://github.com/jezeel/music_feature_analyzer
 issue_tracker: https://github.com/jezeel/music_feature_analyzer/issues
 
 environment:
-  sdk: '>=3.8.1 <4.0.0'
-
-plugin:
-  platforms:
-    android:
-      package: com.music_feature_analyzer
-      pluginClass: MusicFeatureAnalyzerPlugin
-    ios:
-      pluginClass: MusicFeatureAnalyzerPlugin
+  sdk: ">=3.8.1 <4.0.0"
 
 dependencies:
   flutter:
@@ -37,5 +29,12 @@ dev_dependencies:
   json_serializable: ^6.11.4
 
 flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.music_feature_analyzer
+        pluginClass: MusicFeatureAnalyzerPlugin
+      ios:
+        pluginClass: MusicFeatureAnalyzerPlugin
   assets:
     - assets/models/

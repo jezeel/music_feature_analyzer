@@ -12,95 +12,43 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import java.io.File
+import java.util.concurrent.Executors
 
-
-@Suppress("unused")
+/** MusicFeatureAnalyzerPlugin */
 class MusicFeatureAnalyzerPlugin : FlutterPlugin, MethodCallHandler {
+    private val TAG = "MusicFeatureAnalyzerPlugin"
     private lateinit var channel: MethodChannel
+    private lateinit var context: Context
     private val handler = Handler(Looper.getMainLooper())
-    private val TAG = "MusicFeatureAnalyzer"
-    private var applicationContext: Context? = null
-
-    // Fixed: Add comprehensive loading mode detection
-    enum class LoadingMode {
-        PUBLISHED_PACKAGE,
-        LOCAL_PATH,
-        UNKNOWN
-    }
-
-    private fun detectLoadingMode(): LoadingMode {
-        return try {
-            // Check if we're in development (app running from IDE)
-            val isDebuggable = (applicationContext?.applicationInfo?.flags ?: 0) and 
-                               android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
-            
-            // Check code source location
-            val codeSource = this::class.java.protectionDomain?.codeSource?.location
-            val path = codeSource?.path ?: ""
-            
-            Log.d(TAG, "Loading mode detection - Path: $path, Debuggable: $isDebuggable")
-            
-            // Check for published package indicators
-            val isPublished = path.contains(".gradle") ||
-                             path.contains("pub-cache") ||
-                             path.contains(".pub-cache") ||
-                             path.contains("/.pub-cache/") ||
-                             path.contains("/flutter/.pub-cache/")
-            
-            return if (isPublished) {
-                Log.i(TAG, "Loading mode: PUBLISHED_PACKAGE")
-                LoadingMode.PUBLISHED_PACKAGE
-            } else {
-                Log.i(TAG, "Loading mode: LOCAL_PATH or DEVELOPMENT")
-                LoadingMode.LOCAL_PATH
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Could not detect loading mode: ${e.message}")
-            LoadingMode.UNKNOWN
-        }
-    }
+    private val executor = Executors.newCachedThreadPool()
 
     override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
-        try {
-            applicationContext = flutterPluginBinding.applicationContext
-            
-            // Create method channel
-            channel = MethodChannel(
-                flutterPluginBinding.binaryMessenger,
-                "com.music_feature_analyzer/audio_metadata"
-            )
-            channel.setMethodCallHandler(this)
-            
-            Log.i(TAG, "✅ MusicFeatureAnalyzerPlugin attached to engine")
-            Log.d(TAG, "Loading mode detected: ${detectLoadingMode()}")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error attaching plugin: ${e.message}", e)
-            throw e
-        }
-    }
-
-    override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
-        channel.setMethodCallHandler(null)
-        Log.i(TAG, "MusicFeatureAnalyzerPlugin detached from engine")
+        Log.i(TAG, "onAttachedToEngine: Attaching MusicFeatureAnalyzerPlugin")
+        channel = MethodChannel(flutterPluginBinding.binaryMessenger, "com.music_feature_analyzer/audio_metadata")
+        channel.setMethodCallHandler(this)
+        context = flutterPluginBinding.applicationContext
+        Log.i(TAG, "onAttachedToEngine: Channel initialized")
     }
 
     override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
-        // FIXED: Handle verifyConnection first
         if (call.method == "verifyConnection") {
+            // Log that we received the verification call
+            Log.i(TAG, "verifyConnection: Received verification request")
+            
             val loadingMode = detectLoadingMode()
             val response = mapOf(
                 "connected" to true,
                 "channelName" to "com.music_feature_analyzer/audio_metadata",
                 "loadingMode" to loadingMode.name,
-                "handlerSet" to ::channel.isInitialized,
+                "handlerSet" to true,
                 "platform" to "Android",
-                "pluginVersion" to "1.0.1-beta-06"
+                "pluginVersion" to "1.0.1-beta-07"
             )
             result.success(response)
-            Log.d(TAG, "verifyConnection response: $response")
+            Log.i(TAG, "verifyConnection: Responded success")
             return
         }
-        
+
         val path = call.argument<String>("path")
         if (path == null) {
             result.error("INVALID_ARGUMENT", "File path is required", null)
@@ -108,125 +56,136 @@ class MusicFeatureAnalyzerPlugin : FlutterPlugin, MethodCallHandler {
         }
 
         when (call.method) {
-            "getMetadata" -> getMetadata(path, result)
-            "getAlbumArt" -> getAlbumArt(path, result)
-            "getAlbumArtMimeType" -> getAlbumArtMimeType(path, result)
+            "getMetadata" -> executor.execute { getMetadata(path, result) }
+            "getAlbumArt" -> executor.execute { getAlbumArt(path, result) }
+            "getAlbumArtMimeType" -> executor.execute { getAlbumArtMimeType(path, result) }
             else -> result.notImplemented()
         }
     }
 
+    override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
+        Log.i(TAG, "onDetachedFromEngine: Detaching MusicFeatureAnalyzerPlugin")
+        channel.setMethodCallHandler(null)
+    }
+
     private fun getMetadata(filePath: String, result: Result) {
-        Thread {
-            val retriever = MediaMetadataRetriever()
-            val metadata = mutableMapOf<String, Any?>()
+        val retriever = MediaMetadataRetriever()
+        val metadata = mutableMapOf<String, Any?>()
+
+        try {
+            val file = File(filePath)
+            if (file.exists()) {
+                val fileSizeLong = file.length()
+                metadata["fileSize"] = if (fileSizeLong > Int.MAX_VALUE) Int.MAX_VALUE else fileSizeLong.toInt()
+            } else {
+                metadata["error"] = "File does not exist: $filePath"
+                handler.post { result.success(metadata) }
+                return
+            }
+
+            var dataSourceSet = false
+            try {
+                retriever.setDataSource(filePath)
+                dataSourceSet = true
+            } catch (e: IllegalArgumentException) {
+                try {
+                    retriever.setDataSource(file.absolutePath)
+                    dataSourceSet = true
+                } catch (e2: Exception) {
+                    try {
+                        retriever.release()
+                    } catch (ignore: Exception) {}
+                    metadata["error"] = "IllegalArgumentException in setDataSource: ${e2.message}"
+                    metadata["mimeType"] = getMimeTypeFromExtension(filePath)
+                    handler.post { result.success(metadata) }
+                    return
+                }
+            } catch (e: RuntimeException) {
+                try {
+                    retriever.release()
+                } catch (ignore: Exception) {}
+                metadata["error"] = "RuntimeException in setDataSource: ${e.message}"
+                metadata["mimeType"] = getMimeTypeFromExtension(filePath)
+                handler.post { result.success(metadata) }
+                return
+            }
+
+            if (!dataSourceSet) {
+                try {
+                    retriever.release()
+                } catch (ignore: Exception) {}
+                metadata["error"] = "Failed to set data source"
+                metadata["mimeType"] = getMimeTypeFromExtension(filePath)
+                handler.post { result.success(metadata) }
+                return
+            }
 
             try {
-                val file = File(filePath)
-                if (file.exists()) {
-                    val fileSizeLong = file.length()
-                    metadata["fileSize"] = if (fileSizeLong > Int.MAX_VALUE) Int.MAX_VALUE else fileSizeLong.toInt()
+                val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+                metadata["title"] = if (title == null || title == "null") null else title
+                
+                val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+                metadata["artist"] = if (artist == null || artist == "null") null else artist
+                
+                val album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
+                metadata["album"] = if (album == null || album == "null") null else album
+                
+                val albumArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)
+                metadata["albumArtist"] = if (albumArtist == null || albumArtist == "null") null else albumArtist
+                
+                val genre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE)
+                metadata["genre"] = if (genre == null || genre == "null") null else genre
+                
+                val year = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)
+                metadata["year"] = if (year == null || year == "null") null else year
+                
+                val composer = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_COMPOSER)
+                metadata["composer"] = if (composer == null || composer == "null") null else composer
+                
+                val writer = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_WRITER)
+                metadata["writer"] = if (writer == null || writer == "null") null else writer
+                
+                val trackNumber = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)
+                metadata["trackNumber"] = if (trackNumber == null || trackNumber == "null") null else trackNumber
+                
+                val discNumber = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER)
+                metadata["discNumber"] = if (discNumber == null || discNumber == "null") null else discNumber
+
+                val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                metadata["duration"] = durationStr?.toLongOrNull()
+
+                val bitrateStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)
+                metadata["bitrate"] = bitrateStr?.toIntOrNull()
+
+                val mimeType = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE)
+                metadata["mimeType"] = if (mimeType != null && mimeType != "null" && mimeType.isNotEmpty()) {
+                    mimeType
                 } else {
-                    metadata["error"] = "File does not exist: $filePath"
-                    handler.post { result.success(metadata) }
-                    return@Thread
+                    getMimeTypeFromExtension(filePath)
                 }
 
-                var dataSourceSet = false
-                try {
-                    retriever.setDataSource(filePath)
-                    dataSourceSet = true
-                } catch (e: IllegalArgumentException) {
-                    try {
-                        retriever.setDataSource(file.absolutePath)
-                        dataSourceSet = true
-                    } catch (e2: Exception) {
-                        retriever.release()
-                        metadata["error"] = "IllegalArgumentException in setDataSource: ${e2.message}"
-                        metadata["mimeType"] = getMimeTypeFromExtension(filePath)
-                        handler.post { result.success(metadata) }
-                        return@Thread
-                    }
-                } catch (e: RuntimeException) {
-                    retriever.release()
-                    metadata["error"] = "RuntimeException in setDataSource: ${e.message}"
-                    metadata["mimeType"] = getMimeTypeFromExtension(filePath)
-                    handler.post { result.success(metadata) }
-                    return@Thread
-                }
-
-                if (!dataSourceSet) {
-                    retriever.release()
-                    metadata["error"] = "Failed to set data source"
-                    metadata["mimeType"] = getMimeTypeFromExtension(filePath)
-                    handler.post { result.success(metadata) }
-                    return@Thread
-                }
-
-                try {
-                    val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
-                    metadata["title"] = if (title == null || title == "null") null else title
-                    
-                    val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
-                    metadata["artist"] = if (artist == null || artist == "null") null else artist
-                    
-                    val album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
-                    metadata["album"] = if (album == null || album == "null") null else album
-                    
-                    val albumArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)
-                    metadata["albumArtist"] = if (albumArtist == null || albumArtist == "null") null else albumArtist
-                    
-                    val genre = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE)
-                    metadata["genre"] = if (genre == null || genre == "null") null else genre
-                    
-                    val year = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)
-                    metadata["year"] = if (year == null || year == "null") null else year
-                    
-                    val composer = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_COMPOSER)
-                    metadata["composer"] = if (composer == null || composer == "null") null else composer
-                    
-                    val writer = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_WRITER)
-                    metadata["writer"] = if (writer == null || writer == "null") null else writer
-                    
-                    val trackNumber = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)
-                    metadata["trackNumber"] = if (trackNumber == null || trackNumber == "null") null else trackNumber
-                    
-                    val discNumber = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER)
-                    metadata["discNumber"] = if (discNumber == null || discNumber == "null") null else discNumber
-
-                    val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-                    metadata["duration"] = durationStr?.toLongOrNull()
-
-                    val bitrateStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)
-                    metadata["bitrate"] = bitrateStr?.toIntOrNull()
-
-                    val mimeType = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE)
-                    metadata["mimeType"] = if (mimeType != null && mimeType != "null" && mimeType.isNotEmpty()) {
-                        mimeType
-                    } else {
-                        getMimeTypeFromExtension(filePath)
-                    }
-
-                    val embeddedPicture = retriever.embeddedPicture
-                    metadata["hasAlbumArt"] = embeddedPicture != null && embeddedPicture.isNotEmpty()
-                } catch (e: Exception) {
-                    metadata["error"] = "Exception during metadata extraction: ${e.message}"
-                    metadata["mimeType"] = getMimeTypeFromExtension(filePath)
-                }
-
-                retriever.release()
-                handler.post { result.success(metadata) }
+                val embeddedPicture = retriever.embeddedPicture
+                metadata["hasAlbumArt"] = embeddedPicture != null && embeddedPicture.isNotEmpty()
             } catch (e: Exception) {
-                try {
-                    retriever.release()
-                } catch (ex: Exception) {
-                }
-                metadata["error"] = "Exception in getMetadata: ${e.javaClass.simpleName}: ${e.message}"
-                if (!metadata.containsKey("mimeType")) {
-                    metadata["mimeType"] = getMimeTypeFromExtension(filePath)
-                }
-                handler.post { result.success(metadata) }
+                metadata["error"] = "Exception during metadata extraction: ${e.message}"
+                metadata["mimeType"] = getMimeTypeFromExtension(filePath)
             }
-        }.start()
+
+            try {
+                retriever.release()
+            } catch (ignore: Exception) {}
+            handler.post { result.success(metadata) }
+        } catch (e: Exception) {
+            try {
+                retriever.release()
+            } catch (ex: Exception) {
+            }
+            metadata["error"] = "Exception in getMetadata: ${e.javaClass.simpleName}: ${e.message}"
+            if (!metadata.containsKey("mimeType")) {
+                metadata["mimeType"] = getMimeTypeFromExtension(filePath)
+            }
+            handler.post { result.success(metadata) }
+        }
     }
 
     private fun getMimeTypeFromExtension(filePath: String): String {
@@ -250,90 +209,112 @@ class MusicFeatureAnalyzerPlugin : FlutterPlugin, MethodCallHandler {
     }
 
     private fun getAlbumArt(filePath: String, result: Result) {
-        Thread {
-            val retriever = MediaMetadataRetriever()
-            try {
-                val file = File(filePath)
-                if (!file.exists()) {
-                    retriever.release()
-                    handler.post { result.success(null) }
-                    return@Thread
-                }
-
+        val retriever = MediaMetadataRetriever()
+        try {
+            val file = File(filePath)
+            if (!file.exists()) {
                 try {
-                    retriever.setDataSource(filePath)
-                } catch (e: Exception) {
                     retriever.release()
-                    handler.post { result.success(null) }
-                    return@Thread
-                }
-                
-                val art = retriever.embeddedPicture
-                if (art == null || art.isEmpty()) {
-                    retriever.release()
-                    handler.post { result.success(null) }
-                    return@Thread
-                }
+                } catch (ignore: Exception) {}
+                handler.post { result.success(null) }
+                return
+            }
 
-                retriever.release()
-                handler.post { result.success(art) }
+            try {
+                retriever.setDataSource(filePath)
             } catch (e: Exception) {
                 try {
                     retriever.release()
-                } catch (ex: Exception) {
-                }
+                } catch (ignore: Exception) {}
                 handler.post { result.success(null) }
+                return
             }
-        }.start()
+            
+            val art = retriever.embeddedPicture
+            if (art == null || art.isEmpty()) {
+                try {
+                    retriever.release()
+                } catch (ignore: Exception) {}
+                handler.post { result.success(null) }
+                return
+            }
+
+            try {
+                retriever.release()
+            } catch (ignore: Exception) {}
+            handler.post { result.success(art) }
+        } catch (e: Exception) {
+            try {
+                retriever.release()
+            } catch (ex: Exception) {
+            }
+            handler.post { result.success(null) }
+        }
     }
 
     private fun getAlbumArtMimeType(filePath: String, result: Result) {
-        Thread {
-            val retriever = MediaMetadataRetriever()
-            try {
-                val file = File(filePath)
-                if (!file.exists()) {
-                    retriever.release()
-                    handler.post { result.success(null) }
-                    return@Thread
-                }
-                
+        val retriever = MediaMetadataRetriever()
+        try {
+            val file = File(filePath)
+            if (!file.exists()) {
                 try {
-                    retriever.setDataSource(filePath)
-                } catch (e: Exception) {
                     retriever.release()
-                    handler.post { result.success(null) }
-                    return@Thread
-                }
-                
-                val art = retriever.embeddedPicture
-                retriever.release()
-
-                if (art != null && art.size >= 4) {
-                    val mimeType = when {
-                        art[0] == 0xFF.toByte() && art[1] == 0xD8.toByte() && art[2] == 0xFF.toByte() -> "image/jpeg"
-                        art[0] == 0x89.toByte() && art[1] == 0x50.toByte() &&
-                                art[2] == 0x4E.toByte() && art[3] == 0x47.toByte() -> "image/png"
-                        art[0] == 0x47.toByte() && art[1] == 0x49.toByte() &&
-                                art[2] == 0x46.toByte() && art[3] == 0x38.toByte() -> "image/gif"
-                        art.size >= 12 && art[0] == 0x52.toByte() && art[1] == 0x49.toByte() &&
-                                art[2] == 0x46.toByte() && art[3] == 0x46.toByte() &&
-                                art[8] == 0x57.toByte() && art[9] == 0x45.toByte() &&
-                                art[10] == 0x42.toByte() && art[11] == 0x50.toByte() -> "image/webp"
-                        art[0] == 0x42.toByte() && art[1] == 0x4D.toByte() -> "image/bmp"
-                        else -> "image/jpeg"
-                    }
-                    handler.post { result.success(mimeType) }
-                } else {
-                    handler.post { result.success(null) }
-                }
+                } catch (ignore: Exception) {}
+                handler.post { result.success(null) }
+                return
+            }
+            
+            try {
+                retriever.setDataSource(filePath)
             } catch (e: Exception) {
                 try {
                     retriever.release()
-                } catch (ex: Exception) {
+                } catch (ignore: Exception) {}
+                handler.post { result.success(null) }
+                return
+            }
+            
+            val art = retriever.embeddedPicture
+            try {
+                retriever.release()
+            } catch (ignore: Exception) {}
+
+            if (art != null && art.size >= 4) {
+                val mimeType = when {
+                    art[0] == 0xFF.toByte() && art[1] == 0xD8.toByte() && art[2] == 0xFF.toByte() -> "image/jpeg"
+                    art[0] == 0x89.toByte() && art[1] == 0x50.toByte() &&
+                            art[2] == 0x4E.toByte() && art[3] == 0x47.toByte() -> "image/png"
+                    art[0] == 0x47.toByte() && art[1] == 0x49.toByte() &&
+                            art[2] == 0x46.toByte() && art[3] == 0x38.toByte() -> "image/gif"
+                    art.size >= 12 && art[0] == 0x52.toByte() && art[1] == 0x49.toByte() &&
+                            art[2] == 0x46.toByte() && art[3] == 0x46.toByte() &&
+                            art[8] == 0x57.toByte() && art[9] == 0x45.toByte() &&
+                            art[10] == 0x42.toByte() && art[11] == 0x50.toByte() -> "image/webp"
+                    art[0] == 0x42.toByte() && art[1] == 0x4D.toByte() -> "image/bmp"
+                    else -> "image/jpeg"
                 }
+                handler.post { result.success(mimeType) }
+            } else {
                 handler.post { result.success(null) }
             }
-        }.start()
+        } catch (e: Exception) {
+            try {
+                retriever.release()
+            } catch (ex: Exception) {
+            }
+            handler.post { result.success(null) }
+        }
+    }
+    
+    // Enum for loading detection
+    enum class LoadingMode {
+        PUBLISHED_PACKAGE,
+        LOCAL_PATH,
+        UNKNOWN
+    }
+    
+    private fun detectLoadingMode(): LoadingMode {
+        // Simple placeholder as reliable detection is complex and not strictly necessary for functionality
+        return LoadingMode.UNKNOWN
     }
 }

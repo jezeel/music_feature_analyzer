@@ -90,10 +90,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         color: Theme.of(context).colorScheme.primary,
                       ),
                     )
-                  : Icon(
-                      Icons.psychology_outlined,
-                      size: 24.sp,
-                    ),
+                  : Icon(Icons.psychology_outlined, size: 24.sp),
               tooltip: 'Extract AI Features',
             ),
         ],
@@ -104,12 +101,16 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Expanded(
                   child: ListView.builder(
-                    padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 16.w,
+                      vertical: 8.h,
+                    ),
                     itemCount: _songs.length,
                     itemBuilder: (context, index) {
                       final song = _songs[index];
                       final features = _songFeatures[song.id];
-                      final isExtracting = _extractingMetadata[song.filePath] ?? false;
+                      final isExtracting =
+                          _extractingMetadata[song.filePath] ?? false;
                       return _buildSongCard(song, features, isExtracting);
                     },
                   ),
@@ -137,7 +138,9 @@ class _HomeScreenState extends State<HomeScreen> {
           Icon(
             Icons.music_note_outlined,
             size: 80.sp,
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.3),
           ),
           SizedBox(height: 24.h),
           Text(
@@ -145,7 +148,9 @@ class _HomeScreenState extends State<HomeScreen> {
             style: GoogleFonts.poppins(
               fontSize: 20.sp,
               fontWeight: FontWeight.w500,
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.7),
             ),
           ),
           SizedBox(height: 8.h),
@@ -153,7 +158,9 @@ class _HomeScreenState extends State<HomeScreen> {
             'Tap the button below to add music files',
             style: GoogleFonts.poppins(
               fontSize: 14.sp,
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.5),
             ),
           ),
         ],
@@ -161,7 +168,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildSongCard(SongModel song, ExtractedSongFeatures? features, bool isExtracting) {
+  Widget _buildSongCard(
+    SongModel song,
+    ExtractedSongFeatures? features,
+    bool isExtracting,
+  ) {
     return Card(
       margin: EdgeInsets.only(bottom: 12.h),
       elevation: 0,
@@ -228,7 +239,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       song.artist,
                       style: GoogleFonts.poppins(
                         fontSize: 14.sp,
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.6),
                         letterSpacing: -0.2,
                       ),
                       maxLines: 1,
@@ -242,7 +255,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             song.album,
                             style: GoogleFonts.poppins(
                               fontSize: 12.sp,
-                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withValues(alpha: 0.5),
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -252,7 +267,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             '•',
                             style: GoogleFonts.poppins(
                               fontSize: 12.sp,
-                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withValues(alpha: 0.3),
                             ),
                           ),
                           SizedBox(width: 8.w),
@@ -261,7 +278,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           AppUtils.formatDuration(song.duration),
                           style: GoogleFonts.poppins(
                             fontSize: 12.sp,
-                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.5),
                           ),
                         ),
                       ],
@@ -290,11 +309,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   onPressed: _isProcessingFeatures
                       ? null
                       : () => _extractSingleSongFeatures(song),
-                  icon: Icon(
-                    Icons.psychology_outlined,
-                    size: 20.sp,
-                  ),
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.6),
+                  icon: Icon(Icons.psychology_outlined, size: 20.sp),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.6),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),
@@ -305,12 +323,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-
   void _showSelectionDialog() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16.r),
+        ),
         title: Text(
           'Add Songs',
           style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
@@ -389,9 +408,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _extractMetadataForFiles(List<String> filePaths) async {
     // Filter out existing songs and invalid paths
     final newFilePaths = filePaths
-        .where((filePath) => 
-            filePath.isNotEmpty && 
-            !_songs.any((s) => s.filePath == filePath))
+        .where(
+          (filePath) =>
+              filePath.isNotEmpty && !_songs.any((s) => s.filePath == filePath),
+        )
         .toList();
 
     if (newFilePaths.isEmpty) {
@@ -408,18 +428,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       _logger.i('📋 Extracting metadata for ${newFilePaths.length} file(s)...');
-      
+
       // Use batch extraction for instant processing
-      final songs = await MusicFeatureAnalyzer.extractMetadataBatch(newFilePaths);
-      
+      final songs = await MusicFeatureAnalyzer.extractMetadataBatch(
+        newFilePaths,
+      );
+
       if (mounted) {
         final List<SongModel> validSongs = [];
-        
+
         // Validate and add songs
         for (int i = 0; i < songs.length; i++) {
           final song = songs[i];
           final filePath = newFilePaths[i];
-          
+
           if (song != null && _validateSong(song)) {
             validSongs.add(song);
             _logger.i('✅ Metadata extracted for: ${song.title}');
@@ -427,27 +449,31 @@ class _HomeScreenState extends State<HomeScreen> {
           } else {
             _logger.w('⚠️ Invalid or null metadata for: $filePath');
           }
-          
+
           // Update extraction status
           setState(() {
             _extractingMetadata[filePath] = false;
           });
         }
-        
+
         // Add all valid songs at once
         if (validSongs.isNotEmpty) {
           setState(() {
             _songs.addAll(validSongs);
           });
-          
+
           _logger.i('✅ Successfully added ${validSongs.length} song(s)');
-          
+
           // Automatically trigger background feature extraction after successful metadata extraction
           if (_isInitialized && validSongs.isNotEmpty) {
-            _logger.i('🚀 Starting background feature extraction for ${validSongs.length} song(s)...');
+            _logger.i(
+              '🚀 Starting background feature extraction for ${validSongs.length} song(s)...',
+            );
             _extractFeaturesInBackgroundForSongs(validSongs);
           } else if (!_isInitialized) {
-            _logger.w('⚠️ Analyzer not initialized - features will be extracted after initialization');
+            _logger.w(
+              '⚠️ Analyzer not initialized - features will be extracted after initialization',
+            );
             // Retry initialization and then extract features
             _initializeAnalyzer().then((_) {
               if (_isInitialized && validSongs.isNotEmpty) {
@@ -476,28 +502,34 @@ class _HomeScreenState extends State<HomeScreen> {
       _logger.w('⚠️ Song validation failed: filePath is empty');
       return false;
     }
-    
+
     // Validate file exists
     try {
       final file = File(song.filePath);
       if (!file.existsSync()) {
-        _logger.w('⚠️ Song validation failed: file does not exist: ${song.filePath}');
+        _logger.w(
+          '⚠️ Song validation failed: file does not exist: ${song.filePath}',
+        );
         return false;
       }
     } catch (e) {
       _logger.w('⚠️ Song validation failed: cannot check file existence: $e');
       return false;
     }
-    
+
     // Validate title and artist (should not be empty, but allow "Unknown" as fallback)
     if (song.title.trim().isEmpty) {
-      _logger.w('⚠️ Song validation warning: title is empty for ${song.filePath}');
+      _logger.w(
+        '⚠️ Song validation warning: title is empty for ${song.filePath}',
+      );
     }
-    
+
     if (song.artist.trim().isEmpty) {
-      _logger.w('⚠️ Song validation warning: artist is empty for ${song.filePath}');
+      _logger.w(
+        '⚠️ Song validation warning: artist is empty for ${song.filePath}',
+      );
     }
-    
+
     return true;
   }
 
@@ -522,14 +554,17 @@ class _HomeScreenState extends State<HomeScreen> {
     Future.microtask(() async {
       try {
         final filePaths = songs.map((s) => s.filePath).toList();
-        _logger.i('🎵 Starting background feature extraction for ${filePaths.length} song(s)...');
-        
+        _logger.i(
+          '🎵 Starting background feature extraction for ${filePaths.length} song(s)...',
+        );
+
         await MusicFeatureAnalyzer.extractFeaturesInBackground(
           filePaths,
           onProgress: (current, total) {
             _logger.d('📊 Feature extraction progress: $current/$total');
           },
-          onSongUpdated: (filePath, features) => _handleFeatureUpdate(filePath, features, songs),
+          onSongUpdated: (filePath, features) =>
+              _handleFeatureUpdate(filePath, features, songs),
           onCompleted: () {
             if (mounted) {
               setState(() {
@@ -567,7 +602,11 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _handleFeatureUpdate(String filePath, ExtractedSongFeatures? features, [List<SongModel>? fallbackSongs]) {
+  void _handleFeatureUpdate(
+    String filePath,
+    ExtractedSongFeatures? features, [
+    List<SongModel>? fallbackSongs,
+  ]) {
     if (features == null || !mounted) return;
 
     try {
@@ -607,22 +646,22 @@ class _HomeScreenState extends State<HomeScreen> {
       _logger.w('⚠️ Invalid tempo: ${features.tempoBpm} BPM');
       return false;
     }
-    
+
     if (features.danceability < 0 || features.danceability > 1) {
       _logger.w('⚠️ Invalid danceability: ${features.danceability}');
       return false;
     }
-    
+
     if (features.overallEnergy < 0 || features.overallEnergy > 1) {
       _logger.w('⚠️ Invalid energy: ${features.overallEnergy}');
       return false;
     }
-    
+
     if (features.confidence < 0 || features.confidence > 1) {
       _logger.w('⚠️ Invalid confidence: ${features.confidence}');
       return false;
     }
-    
+
     return true;
   }
 
@@ -668,7 +707,10 @@ class _HomeScreenState extends State<HomeScreen> {
             _extractingFeatures[invalidSong.id] = false;
           });
           _logger.w('⚠️ Invalid features extracted for: ${invalidSong.title}');
-          _showSnackBar('Features extracted but validation failed', Colors.orange);
+          _showSnackBar(
+            'Features extracted but validation failed',
+            Colors.orange,
+          );
         }
       } else {
         final noFeaturesSong = song;
@@ -806,10 +848,9 @@ class _HomeScreenState extends State<HomeScreen> {
       'm4b',
       'm4p',
       'amr',
-      '3ga'
+      '3ga',
     ].contains(extension);
   }
-
 
   void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -829,7 +870,9 @@ class _HomeScreenState extends State<HomeScreen> {
     _logger.d('Title: ${song.title}');
     _logger.d('Artist: ${song.artist}');
     _logger.d('Album: ${song.album}');
-    _logger.d('Duration: ${song.duration}ms (${AppUtils.formatDuration(song.duration)})');
+    _logger.d(
+      'Duration: ${song.duration}ms (${AppUtils.formatDuration(song.duration)})',
+    );
     _logger.d('File Path: ${song.filePath}');
     _logger.d('Album Art: ${song.albumArt ?? "N/A"}');
     _logger.d('Year: ${song.year ?? "N/A"}');
@@ -839,25 +882,53 @@ class _HomeScreenState extends State<HomeScreen> {
     _logger.d('Album Artist: ${song.albumArtist ?? "N/A"}');
     _logger.d('Composer: ${song.composer ?? "N/A"}');
     _logger.d('Writer: ${song.writer ?? "N/A"}');
-    _logger.d('Bitrate: ${song.bitrate != null ? "${song.bitrate} kbps" : "N/A"}');
-    _logger.d('File Size: ${song.fileSize != null ? AppUtils.formatFileSize(song.fileSize!) : "N/A"}');
+    _logger.d(
+      'Bitrate: ${song.bitrate != null ? "${song.bitrate} kbps" : "N/A"}',
+    );
+    _logger.d(
+      'File Size: ${song.fileSize != null ? AppUtils.formatFileSize(song.fileSize!) : "N/A"}',
+    );
     _logger.d('MIME Type: ${song.mimeType ?? "N/A"}');
-    _logger.d('Date Added: ${song.dateAdded != null ? AppUtils.formatDate(song.dateAdded!) : "N/A"}');
+    _logger.d(
+      'Date Added: ${song.dateAdded != null ? AppUtils.formatDate(song.dateAdded!) : "N/A"}',
+    );
   }
 
   void _logFeatureValues(ExtractedSongFeatures features, String songTitle) {
     _logger.i('🎵 Feature Values for: $songTitle');
-    _logger.d('Basic Features - Tempo: ${features.tempo}, Beat: ${features.beat}, Energy: ${features.energy}, Mood: ${features.mood}');
-    _logger.d('Vocals: ${features.vocals ?? "N/A"}, Instruments: ${features.instruments.isEmpty ? "N/A" : features.instruments.join(", ")}');
-    _logger.d('YAMNet - Genre: ${features.estimatedGenre}, Has Vocals: ${features.hasVocals}, Energy: ${features.yamnetEnergy.toStringAsFixed(3)}');
-    _logger.d('YAMNet Instruments: ${features.yamnetInstruments.isEmpty ? "N/A" : features.yamnetInstruments.join(", ")}, Mood Tags: ${features.moodTags.isEmpty ? "N/A" : features.moodTags.join(", ")}');
-    _logger.d('Signal Processing - Tempo BPM: ${features.tempoBpm.toStringAsFixed(1)}, Beat Strength: ${features.beatStrength.toStringAsFixed(3)}, Signal Energy: ${features.signalEnergy.toStringAsFixed(3)}');
-    _logger.d('Brightness: ${features.brightness.toStringAsFixed(3)}, Danceability: ${features.danceability.toStringAsFixed(3)}');
-    _logger.d('Combined Metrics - Overall Energy: ${features.overallEnergy.toStringAsFixed(3)}, Intensity: ${features.intensity.toStringAsFixed(3)}');
-    _logger.d('Spectral Centroid: ${features.spectralCentroid.toStringAsFixed(2)} Hz, Spectral Rolloff: ${features.spectralRolloff.toStringAsFixed(2)} Hz');
-    _logger.d('Zero Crossing Rate: ${features.zeroCrossingRate.toStringAsFixed(4)}, Spectral Flux: ${features.spectralFlux.toStringAsFixed(4)}');
-    _logger.d('Complexity: ${features.complexity.toStringAsFixed(3)}, Valence: ${features.valence.toStringAsFixed(3)}, Arousal: ${features.arousal.toStringAsFixed(3)}');
+    _logger.d(
+      'Basic Features - Tempo: ${features.tempo}, Beat: ${features.beat}, Energy: ${features.energy}, Mood: ${features.mood}',
+    );
+    _logger.d(
+      'Vocals: ${features.vocals ?? "N/A"}, Instruments: ${features.instruments.isEmpty ? "N/A" : features.instruments.join(", ")}',
+    );
+    _logger.d(
+      'YAMNet - Genre: ${features.estimatedGenre}, Has Vocals: ${features.hasVocals}, Energy: ${features.yamnetEnergy.toStringAsFixed(3)}',
+    );
+    _logger.d(
+      'YAMNet Instruments: ${features.yamnetInstruments.isEmpty ? "N/A" : features.yamnetInstruments.join(", ")}, Mood Tags: ${features.moodTags.isEmpty ? "N/A" : features.moodTags.join(", ")}',
+    );
+    _logger.d(
+      'Signal Processing - Tempo BPM: ${features.tempoBpm.toStringAsFixed(1)}, Beat Strength: ${features.beatStrength.toStringAsFixed(3)}, Signal Energy: ${features.signalEnergy.toStringAsFixed(3)}',
+    );
+    _logger.d(
+      'Brightness: ${features.brightness.toStringAsFixed(3)}, Danceability: ${features.danceability.toStringAsFixed(3)}',
+    );
+    _logger.d(
+      'Combined Metrics - Overall Energy: ${features.overallEnergy.toStringAsFixed(3)}, Intensity: ${features.intensity.toStringAsFixed(3)}',
+    );
+    _logger.d(
+      'Spectral Centroid: ${features.spectralCentroid.toStringAsFixed(2)} Hz, Spectral Rolloff: ${features.spectralRolloff.toStringAsFixed(2)} Hz',
+    );
+    _logger.d(
+      'Zero Crossing Rate: ${features.zeroCrossingRate.toStringAsFixed(4)}, Spectral Flux: ${features.spectralFlux.toStringAsFixed(4)}',
+    );
+    _logger.d(
+      'Complexity: ${features.complexity.toStringAsFixed(3)}, Valence: ${features.valence.toStringAsFixed(3)}, Arousal: ${features.arousal.toStringAsFixed(3)}',
+    );
     _logger.d('Confidence: ${features.confidence.toStringAsFixed(3)}');
-    _logger.d('Analysis Metadata - Analyzed At: ${AppUtils.formatDate(features.analyzedAt)}, Version: ${features.analyzerVersion}');
+    _logger.d(
+      'Analysis Metadata - Analyzed At: ${AppUtils.formatDate(features.analyzedAt)}, Version: ${features.analyzerVersion}',
+    );
   }
 }

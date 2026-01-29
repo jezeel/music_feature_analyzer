@@ -43,10 +43,18 @@ A comprehensive, beautifully designed example demonstrating the `music_feature_a
 This example demonstrates how to integrate the `music_feature_analyzer` package into your Flutter project:
 
 ### 1. **Add to pubspec.yaml**
+This example uses the package from **Git** (for testing before publishing). After publishing, you can switch to the version from pub.dev.
 ```yaml
 dependencies:
-  music_feature_analyzer: ^1.0.1-beta-06
+  # From Git (current setup - keep for pre-publish testing):
+  music_feature_analyzer:
+    git:
+      url: https://github.com/jezeel/music_feature_analyzer.git
+      ref: main
+  # From pub.dev (after publishing):
+  # music_feature_analyzer: ^1.0.1-beta-07
 ```
+**After pushing package updates to Git:** run `flutter pub upgrade music_feature_analyzer` (or `flutter clean` then `flutter pub get`) in the example so plugin registration picks up the latest version.
 
 ### 2. **Initialize the Package**
 ```dart

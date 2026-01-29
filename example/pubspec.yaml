@@ -14,7 +14,12 @@ dependencies:
   # Music Feature Analyzer Package:
 
   # To use the published version of the plugin, uncomment the following line:
-  music_feature_analyzer: ^1.0.1-beta-05
+  # music_feature_analyzer: ^1.0.1-beta-05
+
+  music_feature_analyzer:
+    git:
+      url: https://github.com/jezeel/music_feature_analyzer.git
+      ref: main
 
   # To use the local version of the plugin, uncomment the following lines:
   # music_feature_analyzer:
@@ -27,7 +32,7 @@ dependencies:
   logger: ^2.4.0
 
   # File Picker
-  file_picker: ^10.3.3
+  file_picker: ^8.1.4
 
   # Additional UI Dependencies
   lottie: ^3.1.2

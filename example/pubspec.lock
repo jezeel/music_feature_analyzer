@@ -9,14 +9,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.0.7"
-  args:
-    dependency: transitive
-    description:
-      name: args
-      sha256: d0481093c50b1da8910eb0bb301626d4d8eb7284aa739614d2b394ee09e3ea04
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.7.0"
   async:
     dependency: transitive
     description:
@@ -81,14 +73,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.8"
-  dbus:
-    dependency: transitive
-    description:
-      name: dbus
-      sha256: "79e0c23480ff85dc68de79e2cd6334add97e48f7f4865d17686dd6ea81a47e8c"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.7.11"
   fake_async:
     dependency: transitive
     description:
@@ -125,10 +109,10 @@ packages:
     dependency: "direct main"
     description:
       name: file_picker
-      sha256: d974b6ba2606371ac71dd94254beefb6fa81185bde0b59bdc1df09885da85fde
+      sha256: ab13ae8ef5580a411c458d6207b6774a6c237d77ac37011b13994879f68a8810
       url: "https://pub.dev"
     source: hosted
-    version: "10.3.8"
+    version: "8.3.7"
   flutter:
     dependency: "direct main"
     description: flutter
@@ -212,10 +196,10 @@ packages:
     dependency: transitive
     description:
       name: json_annotation
-      sha256: "1ce844379ca14835a50d2f019a3099f419082cfdd231cd86a142af94dd5c6bb1"
+      sha256: "805fa86df56383000f640384b282ce0cb8431f1a7a2396de92fb66186d8c57df"
       url: "https://pub.dev"
     source: hosted
-    version: "4.9.0"
+    version: "4.10.0"
   leak_tracker:
     dependency: transitive
     description:
@@ -291,11 +275,12 @@ packages:
   music_feature_analyzer:
     dependency: "direct main"
     description:
-      name: music_feature_analyzer
-      sha256: d800e82341f3603a5190554883541a8938653960750bd7bcc6aa97e590f61c0f
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.1-beta-05"
+      path: "."
+      ref: main
+      resolved-ref: "6cfa6bcac52a27898e2cd2eccbfc5d3b507e6b1f"
+      url: "https://github.com/jezeel/music_feature_analyzer.git"
+    source: git
+    version: "1.0.1-beta-01"
   path:
     dependency: transitive
     description:
