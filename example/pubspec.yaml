@@ -14,12 +14,12 @@ dependencies:
   # Music Feature Analyzer Package:
 
   # To use the published version of the plugin, uncomment the following line:
-  # music_feature_analyzer: ^1.0.1-beta-05
+  music_feature_analyzer: ^1.0.1
 
-  music_feature_analyzer:
-    git:
-      url: https://github.com/jezeel/music_feature_analyzer.git
-      ref: 1.0.1-beta
+  # music_feature_analyzer:
+  #   git:
+  #     url: https://github.com/jezeel/music_feature_analyzer.git
+  #     ref: 1.0.1-beta
 
   # To use the local version of the plugin, uncomment the following lines:
   # music_feature_analyzer:
