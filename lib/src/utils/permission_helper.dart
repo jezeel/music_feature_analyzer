@@ -341,47 +341,11 @@ Add to ios/Runner/Info.plist:
     };
   }
 
-  /// Log comprehensive permission instructions with all edge cases
+  /// Log permission instructions (use getPermissionInstructions() for full data).
   static void logPermissionInstructions() {
     final instructions = getPermissionInstructions();
-    _logger.i('📱 Permission Instructions for ${instructions['platform']}:');
-    
-    if (instructions.containsKey('sdkVersion')) {
-      _logger.i('SDK Version: ${instructions['sdkVersion']}');
-    }
-    if (instructions.containsKey('iosVersion')) {
-      _logger.i('iOS Version: ${instructions['iosVersion']}');
-    }
-    
-    _logger.i('Required Permission: ${instructions['permission']}');
-    
     if (instructions['manifestRequired'] == true) {
-      _logger.w('⚠️ Manifest/Plist configuration required!');
-      _logger.i('${instructions['manifestInstructions']}');
+      _logger.w('Manifest/Plist configuration required for audio access. See getPermissionInstructions().');
     }
-    
-    if (instructions.containsKey('edgeCases') && (instructions['edgeCases'] as List).isNotEmpty) {
-      _logger.i('📋 Edge Cases Handled:');
-      for (final edgeCase in instructions['edgeCases'] as List) {
-        _logger.i('  • $edgeCase');
-      }
-    }
-    
-    if (instructions.containsKey('conflicts') && (instructions['conflicts'] as List).isNotEmpty) {
-      _logger.w('⚠️ Potential Conflicts:');
-      for (final conflict in instructions['conflicts'] as List) {
-        _logger.w('  • $conflict');
-      }
-    }
-    
-    if (instructions.containsKey('resolutions') && (instructions['resolutions'] as List).isNotEmpty) {
-      _logger.i('✅ Resolutions:');
-      for (final resolution in instructions['resolutions'] as List) {
-        _logger.i('  • $resolution');
-      }
-    }
-    
-    _logger.i('Example Code:\n${instructions['code']}');
-    _logger.i('See PLATFORM_SETUP_GUIDE.md for complete setup instructions');
   }
 }

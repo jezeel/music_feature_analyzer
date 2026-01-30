@@ -38,9 +38,7 @@ class MetadataExtractor {
     if (_initialized) return true;
 
     try {
-      _logger.i('Initializing MetadataExtractor...');
       _initialized = true;
-      _logger.i('MetadataExtractor initialization completed successfully');
       return true;
     } catch (e, stackTrace) {
       _logger.e(
@@ -69,7 +67,6 @@ class MetadataExtractor {
   /// Core metadata extraction function
   static Future<SongModel?> _extractMetadataCore(String filePath) async {
     if (!_initialized) {
-      _logger.i('MetadataExtractor initializing on first use...');
       final initialized = await initialize();
       if (!initialized) {
         _logger.e('Failed to initialize MetadataExtractor');
@@ -78,8 +75,6 @@ class MetadataExtractor {
     }
 
     try {
-      _logger.d('Extracting metadata from: $filePath');
-
       // Validate file
       if (!await isValidAudioFile(filePath)) {
         _logger.w('Invalid audio file: $filePath');
@@ -96,13 +91,6 @@ class MetadataExtractor {
       AudioMetadata? metadata;
       try {
         metadata = await NativeMetadataService.getMetadata(filePath);
-        if (metadata != null) {
-          _logger.d('✅ Successfully read metadata from: $filePath');
-        } else {
-          _logger.d(
-            '⚠️ Native metadata service returned null for: $filePath - will use filename parsing fallback',
-          );
-        }
       } catch (e, stackTrace) {
         _logger.w(
           'Failed to read metadata for $filePath: $e',
@@ -130,17 +118,12 @@ class MetadataExtractor {
       // Extract duration with multiple fallback strategies
       var duration = MetadataUtils.extractDurationSafely(metadata);
       if (duration == Duration.zero || duration.inMilliseconds <= 0) {
-        _logger.d('Duration is zero or invalid, trying fallback methods...');
         duration = await MetadataUtils.getDurationWithFallback(filePath);
-        
-        // If still zero, try to get from file system metadata
         if (duration == Duration.zero) {
           try {
-            // Try one more time with native service (sometimes it works on retry)
             final retryMetadata = await NativeMetadataService.getMetadata(filePath);
             if (retryMetadata?.duration != null && retryMetadata!.duration! > 0) {
               duration = Duration(milliseconds: retryMetadata.duration!);
-              _logger.d('✅ Duration extracted on retry: ${duration.inMilliseconds}ms');
             }
           } catch (e) {
             _logger.w('Duration retry failed: $e');
@@ -167,21 +150,13 @@ class MetadataExtractor {
       if (metadata?.fileSize != null && metadata!.fileSize! > 0) {
         fileSize = metadata.fileSize!;
       } else {
-        _logger.d('File size not in metadata or invalid, getting from file system...');
         fileSize = await MetadataUtils.getFileSize(filePath);
-        
-        // Final validation - ensure file size is valid
         if (fileSize <= 0) {
           try {
             final file = File(filePath);
             if (await file.exists()) {
               final fileLength = await file.length();
-              if (fileLength > 0) {
-                fileSize = fileLength;
-                _logger.d('✅ File size obtained from file system: $fileSize bytes');
-              } else {
-                fileSize = 0;
-              }
+              fileSize = fileLength > 0 ? fileLength : 0;
             } else {
               fileSize = 0;
             }
@@ -195,14 +170,11 @@ class MetadataExtractor {
       // Get MIME type - prefer from metadata, fallback to extension
       String? mimeType = metadata?.mimeType;
       if (mimeType == null || mimeType.trim().isEmpty || mimeType == 'null') {
-        _logger.d('MIME type not in metadata, using extension...');
         mimeType = MetadataUtils.getMimeTypeFromExtension(filePath);
       }
-      
-      // Final validation - ensure MIME type is not null
       if (mimeType == null || mimeType.trim().isEmpty) {
-        mimeType = 'audio/mpeg'; // Safe default
-        _logger.w('⚠️ MIME type is null, using default: $mimeType');
+        mimeType = 'audio/mpeg';
+        _logger.w('MIME type missing, using default: audio/mpeg');
       }
       
       final dateAdded = await MetadataUtils.getFileCreationDate(filePath);
@@ -282,31 +254,7 @@ class MetadataExtractor {
         dateAdded: validatedData['dateAdded'] as DateTime?,
       );
 
-      // Comprehensive logging of all extracted metadata (using validated data)
-      _logger.i('✅ Successfully extracted and validated metadata for: ${song.title} by ${song.artist}');
-      _logger.d('📋 Metadata Summary (All Fields Validated):');
-      _logger.d('   ID: ${song.id}');
-      _logger.d('   Title: ${song.title}');
-      _logger.d('   Artist: ${song.artist}');
-      _logger.d('   Album: ${song.album}');
-      _logger.d('   Duration: ${song.duration}ms (${(song.duration / 1000).toStringAsFixed(1)}s)');
-      _logger.d('   Album Art: ${song.albumArt ?? "N/A"}');
-      _logger.d('   Genre: ${song.genre ?? "N/A"}');
-      _logger.d('   Year: ${song.year ?? "N/A"}');
-      _logger.d('   Track Number: ${song.trackNumber ?? "N/A"}');
-      _logger.d('   Disc Number: ${song.discNumber ?? "N/A"}');
-      _logger.d('   Album Artist: ${song.albumArtist ?? "N/A"}');
-      _logger.d('   Composer: ${song.composer ?? "N/A"}');
-      _logger.d('   Writer: ${song.writer ?? "N/A"}');
-      _logger.d('   Bitrate: ${song.bitrate ?? "N/A"} kbps');
-      final fileSizeMB = song.fileSize != null && song.fileSize! > 0
-          ? (song.fileSize! / (1024 * 1024)).toStringAsFixed(2)
-          : '0.00';
-      _logger.d('   File Size: ${song.fileSize ?? 0} bytes ($fileSizeMB MB)');
-      _logger.d('   MIME Type: ${song.mimeType ?? "N/A"}');
-      _logger.d('   Date Added: ${song.dateAdded ?? "N/A"}');
-      
-      // Validation summary
+      // Validation summary - log only when there are issues
       final validationIssues = <String>[];
       if (song.duration <= 0) validationIssues.add('Duration is zero or invalid');
       if (song.fileSize == null || (song.fileSize != null && song.fileSize! <= 0)) {
@@ -314,13 +262,10 @@ class MetadataExtractor {
       }
       if (song.title.isEmpty || song.title == 'Unknown Title') validationIssues.add('Title is missing');
       if (song.artist.isEmpty || song.artist == 'Unknown Artist') validationIssues.add('Artist is missing');
-      
       if (validationIssues.isNotEmpty) {
-        _logger.w('⚠️ Validation warnings: ${validationIssues.join(", ")}');
-      } else {
-        _logger.d('✅ All metadata fields validated successfully');
+        _logger.w('Metadata validation: ${validationIssues.join(", ")}');
       }
-      
+
       return song;
     } catch (e, stackTrace) {
       _logger.e(
@@ -488,7 +433,6 @@ class MetadataExtractor {
         validatedTitle.toLowerCase() == 'untitled' ||
         validatedTitle.length < 2) {
       validatedTitle = _extractTitleFromPath(filePath);
-      _logger.d('Title was empty or invalid, using filename: $validatedTitle');
     }
     validatedTitle = validatedTitle.trim();
     if (validatedTitle.length > 200) validatedTitle = validatedTitle.substring(0, 200);
@@ -499,7 +443,6 @@ class MetadataExtractor {
         validatedArtist.toLowerCase() == 'unknown artist' ||
         validatedArtist.length < 2) {
       validatedArtist = 'Unknown Artist';
-      _logger.d('Artist was empty or invalid, using default: $validatedArtist');
     }
     validatedArtist = validatedArtist.trim();
     if (validatedArtist.length > 120) validatedArtist = validatedArtist.substring(0, 120);
@@ -510,7 +453,6 @@ class MetadataExtractor {
         validatedAlbum.toLowerCase() == 'unknown album' ||
         validatedAlbum.length < 2) {
       validatedAlbum = 'Unknown Album';
-      _logger.d('Album was empty or invalid, using default: $validatedAlbum');
     }
     validatedAlbum = validatedAlbum.trim();
     if (validatedAlbum.length > 120) validatedAlbum = validatedAlbum.substring(0, 120);
@@ -528,11 +470,10 @@ class MetadataExtractor {
         if (artFile.existsSync()) {
           validatedAlbumArt = albumArt;
         } else {
-          _logger.w('Album art file does not exist: $albumArt');
           validatedAlbumArt = null;
         }
       } catch (e) {
-        _logger.w('Error validating album art path: $albumArt - $e');
+        _logger.w('Album art path invalid: $albumArt');
         validatedAlbumArt = null;
       }
     }
@@ -616,11 +557,7 @@ class MetadataExtractor {
         if (file.existsSync()) {
           final fileLength = file.lengthSync();
           validatedFileSize = fileLength > 0 ? fileLength : 0;
-          if (validatedFileSize > 0) {
-            _logger.d('File size validated from file system: $validatedFileSize bytes');
-          }
         } else {
-          _logger.w('File does not exist for size validation: $filePath');
           validatedFileSize = 0;
         }
       } catch (e) {
@@ -646,7 +583,7 @@ class MetadataExtractor {
       if (notFuture && reasonablePast) {
         validatedDateAdded = dateAdded;
       } else {
-        _logger.w('Invalid date added: $dateAdded (notFuture=$notFuture, reasonablePast=$reasonablePast)');
+        _logger.w('Invalid date added: $dateAdded');
         validatedDateAdded = DateTime.now();
       }
     } else {

@@ -4,11 +4,10 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'music_feature_analyzer'
-  s.version          = '1.0.1-beta-07'
-  s.summary          = 'A comprehensive music feature analysis package using YAMNet AI and signal processing'
+  s.version          = '1.0.1'
+  s.summary          = 'Extract song metadata and AI music features from audio files'
   s.description      = <<-DESC
-A Flutter plugin for extracting audio metadata and features from music files.
-Supports Android and iOS with automatic native code registration.
+Flutter plugin to get song metadata (title, artist, album, duration, bitrate, album art, genre, etc.) and AI-powered music features from audio files. Supports Android and iOS.
                        DESC
   s.homepage         = 'https://github.com/jezeel/music_feature_analyzer'
   s.license          = { :file => '../LICENSE' }

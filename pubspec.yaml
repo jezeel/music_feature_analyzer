@@ -1,6 +1,13 @@
 name: music_feature_analyzer
-description: A comprehensive music feature analysis package using YAMNet AI and signal processing.
-version: 1.0.1-beta-07
+description: Flutter package to extract song metadata and AI-powered music features from audio files. Get title, artist, album, duration, bitrate, album art, genre, and more on Android & iOS.
+version: 1.0.1
+
+topics:
+  - audio
+  - metadata
+  - music
+  - music-player
+  - song
 
 homepage: https://github.com/jezeel/music_feature_analyzer
 repository: https://github.com/jezeel/music_feature_analyzer

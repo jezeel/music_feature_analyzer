@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [1.0.1] - 2026-01-29
+
+**Stable release.** Song metadata extraction and AI feature analysis for Flutter (Android & iOS).
+
+### Added
+
+- **Song metadata extractor** — Get full song details from audio files without initializing the AI model. Use `metadata(path)` for a single file or `extractMetadataBatch(paths)` for multiple files. Returns `SongModel` with title, artist, album, duration, bitrate, album art path, genre, year, track/disc number, composer, writer, file size, MIME type, and more.
+- **Native metadata APIs** — Android uses `MediaMetadataRetriever`; iOS uses `AVFoundation`. Album art and MIME type detection; bitrate in kbps; year/date parsing from file tags.
+- **Platform validation** — Blank or invalid file path rejected on both platforms; invalid duration (NaN/infinite) handled on iOS; errors returned in metadata map instead of unhandled failures.
+
+### Changed
+
+- **README** — Clear, classic layout: install, quick start (metadata first, then AI features), data tables, API summary, requirements. Optimized for pub.dev discoverability (song metadata, audio metadata, music features, Flutter).
+- **Package description** — Updated for pub.dev search: "Flutter package to extract song metadata and AI-powered music features from audio files."
+- **Version** — Stable 1.0.1 (no beta suffix) across pubspec, Android Gradle, iOS podspec, and native plugin version strings.
+
+### Technical
+
+- Method channel: `com.music_feature_analyzer/audio_metadata`
+- Flutter 3.0.0+, Dart 3.8.1+
+- Android API 21+, iOS 12.0+
+
+---
+
+## [1.0.1-beta-07] - 2026-01-27
+
+> **Beta release** (last before 1.0.1 stable). Native plugin improvements and validation.
+
+### Changed
+
+- **Android (`MusicFeatureAnalyzerPlugin.kt`)** — Reject blank file path with `INVALID_ARGUMENT` before any work. Bitrate sent to Dart in kbps (converted from bps). Extract and send `METADATA_KEY_DATE` as `date` for year parsing. Error handling and resource cleanup in `getMetadata`, `getAlbumArt`, `getAlbumArtMimeType`. Removed verbose logging; kept error and important warning logs.
+- **iOS (`MusicFeatureAnalyzerPlugin.swift`)** — Reject blank or whitespace-only path. Wrap `getMetadata` in top-level `do-catch`; set `metadata["error"]` on any thrown error. Validate duration: only set `metadata["duration"]` when `durationInSeconds` is finite, non-NaN, and ≥ 0 (handles corrupt/unsupported files). Bitrate in kbps; year/date from common metadata. Album art and MIME detection unchanged.
+- **pubspec.yaml** — Version set to `1.0.1-beta-07`. Description and dependencies unchanged.
+
+### Technical Notes
+
+- Method channel: `com.music_feature_analyzer/audio_metadata`
+- Flutter 3.0.0+, Dart 3.8.1+
+- Android API 21+, iOS 12.0+
+
+---
+
 ## [1.0.1-beta-06] - 2026-01-23
 
 > ⚠️ **Beta Release**: Plugin discovery configuration fix. Not recommended for production use.

@@ -17,53 +17,23 @@ class AlbumArtHandler {
     AudioMetadata? metadata,
   ) async {
     try {
-      _logger.d('🎨 Starting album art extraction for: $filePath');
-      
-      // ALWAYS try to extract album art, even if hasAlbumArt is false
-      // Some files may have album art even if the flag is not set correctly
-      _logger.d('🎨 Calling native service to get album art...');
       final albumArtData = await NativeMetadataService.getAlbumArt(filePath);
-
       if (albumArtData == null || albumArtData.isEmpty) {
-        _logger.d('⚠️ No album art data extracted from embedded metadata for: $filePath');
-        _logger.d('   hasAlbumArt flag from metadata: ${metadata?.hasAlbumArt ?? false}');
         return null;
       }
-
-      _logger.d('🎨 Received album art data: ${albumArtData.length} bytes');
-
-      // Validate minimum size (at least 100 bytes to be a valid image)
       if (albumArtData.length < 100) {
-        _logger.w('⚠️ Album art data too small (${albumArtData.length} bytes) for: $filePath');
+        _logger.w('Album art data too small for: $filePath');
         return null;
       }
-
-      _logger.i('✅ Found embedded album art (${albumArtData.length} bytes) for: $filePath');
-
-      // Get MIME type from native service if available
-      _logger.d('🎨 Getting album art MIME type...');
       final mimeType = await NativeMetadataService.getAlbumArtMimeType(filePath);
-      _logger.d('🎨 Album art MIME type: ${mimeType ?? "unknown"}');
-
-      _logger.d('🎨 Optimizing album art...');
       final optimizedData = await optimizeAlbumArt(albumArtData);
       if (optimizedData == null || optimizedData.isEmpty) {
-        _logger.w('⚠️ Failed to optimize album art for: $filePath - using original data');
-        final savedPath = await saveAlbumArt(filePath, albumArtData, mimeType);
-        if (savedPath != null) {
-          _logger.i('✅ Saved original album art to: $savedPath');
-        }
-        return savedPath;
+        _logger.w('Album art optimization failed for: $filePath');
+        return saveAlbumArt(filePath, albumArtData, mimeType);
       }
-
-      _logger.d('🎨 Album art optimized: ${albumArtData.length} bytes -> ${optimizedData.length} bytes');
-      final savedPath = await saveAlbumArt(filePath, optimizedData, mimeType);
-      if (savedPath != null) {
-        _logger.i('✅ Saved optimized album art to: $savedPath');
-      }
-      return savedPath;
+      return saveAlbumArt(filePath, optimizedData, mimeType);
     } catch (e, stackTrace) {
-      _logger.e('❌ Error extracting album art from $filePath', error: e, stackTrace: stackTrace);
+      _logger.e('Album art extraction failed: $filePath', error: e, stackTrace: stackTrace);
       return null;
     }
   }
@@ -83,17 +53,11 @@ class AlbumArtHandler {
   /// Find external album art files in the same directory
   static Future<String?> findExternalAlbumArt(String filePath) async {
     try {
-      _logger.d('🔍 Searching for external album art for: $filePath');
       final file = File(filePath);
       final dir = file.parent;
-      
       if (!await dir.exists()) {
-        _logger.d('⚠️ Directory does not exist for external album art search: ${dir.path}');
         return null;
       }
-
-      _logger.d('🔍 Searching in directory: ${dir.path}');
-
       // Common album art filenames (case-insensitive search)
       final candidates = <String>[
         'cover.jpg', 'cover.png', 'cover.jpeg',
@@ -113,29 +77,19 @@ class AlbumArtHandler {
         if (await f.exists()) {
           final fileSize = await f.length();
           if (fileSize < 100) {
-            _logger.d('   Skipping ${f.path} - too small (${fileSize} bytes)');
             continue;
           }
-
-          _logger.i('✅ Found external album art: ${f.path} (${fileSize} bytes)');
-
           final data = await f.readAsBytes();
           final optimized = await optimizeAlbumArt(data);
-          final savedPath = await saveAlbumArt(
+          return saveAlbumArt(
             filePath,
             optimized ?? data,
             guessMimeTypeFromPath(name),
           );
-          if (savedPath != null) {
-            _logger.i('✅ Saved external album art to: $savedPath');
-          }
-          return savedPath;
         }
       }
-
-      _logger.d('⚠️ No external album art found in directory: ${dir.path}');
     } catch (e, stackTrace) {
-      _logger.w('❌ External album art search failed for $filePath', error: e, stackTrace: stackTrace);
+      _logger.w('External album art search failed: $filePath', error: e, stackTrace: stackTrace);
     }
     return null;
   }
@@ -171,9 +125,6 @@ class AlbumArtHandler {
       final albumArtFile = File(albumArtPath);
       if (!await albumArtFile.exists()) {
         await albumArtFile.writeAsBytes(data);
-        _logger.d('Saved optimized album art: $albumArtPath');
-      } else {
-        _logger.d('Album art already exists: $albumArtPath');
       }
       return albumArtPath;
     } catch (e) {
@@ -189,10 +140,9 @@ class AlbumArtHandler {
         final albumArtPath = '${albumArtDir.path}/$songId$extension';
         final albumArtFile = File(albumArtPath);
         await albumArtFile.writeAsBytes(data);
-        _logger.d('Saved album art to temp directory: $albumArtPath');
         return albumArtPath;
       } catch (tempError) {
-        _logger.e('Failed to save album art to temp directory: $tempError');
+        _logger.e('Failed to save album art: $tempError');
         return null;
       }
     }

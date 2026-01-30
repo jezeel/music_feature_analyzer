@@ -5,7 +5,7 @@ class AppLogger {
   final Logger _logger;
   
   static const bool _enableTraceLogs = false;
-  static const bool _enableDebugLogs = true;
+  static const bool _enableDebugLogs = false;
   static const bool _enableInfoLogs = true;
   static const bool _enableWarningLogs = true;
   static const bool _enableErrorLogs = true;

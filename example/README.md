@@ -51,8 +51,8 @@ dependencies:
     git:
       url: https://github.com/jezeel/music_feature_analyzer.git
       ref: main
-  # From pub.dev (after publishing):
-  # music_feature_analyzer: ^1.0.1-beta-07
+  # From pub.dev:
+  # music_feature_analyzer: ^1.0.1
 ```
 **After pushing package updates to Git:** run `flutter pub upgrade music_feature_analyzer` (or `flutter clean` then `flutter pub get`) in the example so plugin registration picks up the latest version.
 

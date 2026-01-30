@@ -1,5 +1,5 @@
 group 'com.music_feature_analyzer'
-version '1.0.1-beta-07'
+version '1.0.1'
 
 buildscript {
     ext.kotlin_version = '1.9.0'

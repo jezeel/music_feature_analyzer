@@ -1,10 +1,8 @@
-# 🎵 Music Feature Analyzer
+# Music Feature Analyzer
 
-Extract metadata and AI-powered features from audio files (Android & iOS).
+**Get song metadata and AI-powered music features from audio files in Flutter.**
 
-> ⚠️ **Beta** — Not recommended for production.
-
-[![pub](https://img.shields.io/badge/pub-1.0.1--beta-0175C2)](https://pub.dev/packages/music_feature_analyzer) [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+Extract title, artist, album, duration, bitrate, album art, genre, year, and more from local audio files—then optionally run AI analysis for tempo, mood, instruments, and 20+ musical features. Android and iOS.
 
 ---
 
@@ -12,23 +10,64 @@ Extract metadata and AI-powered features from audio files (Android & iOS).
 
 ```yaml
 dependencies:
-  music_feature_analyzer: ^1.0.1-beta
+  music_feature_analyzer: ^1.0.1
 ```
 
 ```bash
 flutter pub get
 ```
 
+[![pub package](https://img.shields.io/pub/v/music_feature_analyzer.svg)](https://pub.dev/packages/music_feature_analyzer) · [License: MIT](LICENSE)
+
 ---
 
-## Data you get from the package
+## Quick start
 
-### Metadata (SongModel)
+### Song metadata (no initialization)
 
-From `metadata()` and `extractMetadataBatch()` — one row per field:
+Get full song details from a file path. Uses native Android `MediaMetadataRetriever` and iOS `AVFoundation`.
+
+```dart
+import 'package:music_feature_analyzer/music_feature_analyzer.dart';
+
+// Single file
+final song = await MusicFeatureAnalyzer.metadata('/path/to/song.mp3');
+// song.title, song.artist, song.album, song.duration, song.bitrate, song.genre, etc.
+
+// Multiple files
+final songs = await MusicFeatureAnalyzer.extractMetadataBatch([
+  '/path/to/song1.mp3',
+  '/path/to/song2.m4a',
+]);
+```
+
+### AI features (initialize once)
+
+Tempo, mood, instruments, energy, danceability, and more. Requires one-time `initialize()`.
+
+```dart
+await MusicFeatureAnalyzer.initialize();
+
+final features = await MusicFeatureAnalyzer.analyzeSong(song!);
+// features.tempoBpm, features.mood, features.instruments, features.danceability, etc.
+
+// Background processing (keeps UI responsive)
+final results = await MusicFeatureAnalyzer.extractFeaturesInBackground(
+  filePaths,
+  onProgress: (current, total) => print('$current / $total'),
+  onSongUpdated: (path, features) => {},
+  onCompleted: () => print('Done'),
+);
+```
+
+---
+
+## What you get
+
+### Metadata (`SongModel`)
 
 | Field | Type | Description |
-|-------|------|-------------|
+|-------|------|--------------|
 | `id` | `String` | Unique identifier |
 | `title` | `String` | Song title |
 | `artist` | `String` | Artist name |
@@ -37,110 +76,70 @@ From `metadata()` and `extractMetadataBatch()` — one row per field:
 | `filePath` | `String` | Path to the audio file |
 | `albumArt` | `String?` | Path to album art image |
 | `year` | `int?` | Release year |
-| `genre` | `String?` | Genre from metadata |
-| `trackNumber` | `int?` | Track number in album |
-| `discNumber` | `int?` | Disc number for multi-disc albums |
-| `albumArtist` | `String?` | Album artist (may differ from track artist) |
-| `composer` | `String?` | Composer name |
-| `writer` | `String?` | Songwriter name |
-| `bitrate` | `int?` | Audio bitrate in kbps |
+| `genre` | `String?` | Genre from file metadata |
+| `trackNumber` | `int?` | Track number |
+| `discNumber` | `int?` | Disc number |
+| `albumArtist` | `String?` | Album artist |
+| `composer` | `String?` | Composer |
+| `writer` | `String?` | Writer |
+| `bitrate` | `int?` | Bitrate in kbps |
 | `fileSize` | `int?` | File size in bytes |
-| `mimeType` | `String?` | Audio file MIME type |
-| `dateAdded` | `DateTime?` | When file was added/created |
-| `features` | `ExtractedSongFeatures?` | Extracted features (null when only metadata is used) |
+| `mimeType` | `String?` | MIME type |
+| `dateAdded` | `DateTime?` | File date added |
+| `features` | `ExtractedSongFeatures?` | AI features (when analyzed) |
 
-### AI Features (ExtractedSongFeatures)
+### AI features (`ExtractedSongFeatures`)
 
-From `analyzeSong()`, `analyzeSongs()`, and `extractFeaturesInBackground()` — one row per field:
+From `analyzeSong()`, `analyzeSongs()`, or `extractFeaturesInBackground()`:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `tempo` | `String` | Tempo category (e.g. Fast, Medium, Slow) |
-| `beat` | `String` | Beat category (e.g. Strong, Soft, No Beat) |
-| `energy` | `String` | Energy category (e.g. High, Medium, Low) |
-| `instruments` | `List<String>` | Detected instruments (e.g. Piano, Guitar) |
-| `vocals` | `String?` | Vocal description or null for instrumental |
-| `mood` | `String` | Mood classification (Happy, Sad, Energetic, etc.) |
-| `yamnetInstruments` | `List<String>` | YAMNet-detected instruments |
-| `hasVocals` | `bool` | Whether vocals are detected |
-| `estimatedGenre` | `String` | Genre classification (Rock, Pop, Jazz, etc.) |
-| `yamnetEnergy` | `double` | YAMNet energy score (0.0–1.0) |
-| `moodTags` | `List<String>` | Multiple mood tags |
-| `tempoBpm` | `double` | Tempo in beats per minute (60–200) |
-| `beatStrength` | `double` | Beat strength (0.0–1.0) |
-| `signalEnergy` | `double` | Signal energy (0.0–1.0) |
-| `brightness` | `double` | Spectral brightness |
-| `danceability` | `double` | Danceability score (0.0–1.0) |
-| `loudness` | `double` | Normalized loudness (0.0–1.0) |
-| `overallEnergy` | `double` | Combined energy level (0.0–1.0) |
-| `intensity` | `double` | Overall intensity |
-| `spectralCentroid` | `double` | Spectral centroid (Hz) |
-| `spectralRolloff` | `double` | Spectral rolloff (Hz) |
-| `zeroCrossingRate` | `double` | Zero crossing rate |
-| `spectralFlux` | `double` | Spectral flux |
-| `complexity` | `double` | Complexity score |
-| `valence` | `double` | Emotional positivity (0.0–1.0) |
-| `arousal` | `double` | Emotional intensity (0.0–1.0) |
-| `confidence` | `double` | Analysis confidence (0.0–1.0) |
-| `analyzedAt` | `DateTime` | When analysis was performed |
-| `analyzerVersion` | `String` | Analyzer version used |
+- **Categories:** `tempo`, `beat`, `energy`, `mood`, `vocals`, `estimatedGenre`
+- **Lists:** `instruments`, `yamnetInstruments`, `moodTags`
+- **Numeric:** `tempoBpm`, `beatStrength`, `danceability`, `loudness`, `valence`, `arousal`, `spectralCentroid`, `spectralRolloff`, `zeroCrossingRate`, `spectralFlux`, `complexity`, `confidence`, and more.
 
 ---
 
-## Function calls
+## API summary
 
-```dart
-import 'package:music_feature_analyzer/music_feature_analyzer.dart';
-
-// --- Metadata (no initialize) ---
-final song = await MusicFeatureAnalyzer.metadata('/path/to/song.mp3');
-final songs = await MusicFeatureAnalyzer.extractMetadataBatch(['/a.mp3', '/b.mp3']);
-
-// --- Feature extraction (initialize once) ---
-await MusicFeatureAnalyzer.initialize();
-final features = await MusicFeatureAnalyzer.analyzeSong(song!);
-final list = await MusicFeatureAnalyzer.analyzeSongs(songs);
-
-// --- Background: runs in a separate isolate so the UI stays responsive; each song takes a few seconds. ---
-// You don't need to pass duration — the package gets it from metadata for each file.
-final results = await MusicFeatureAnalyzer.extractFeaturesInBackground(
-  filePaths,
-  onProgress: (current, total) {},
-  onSongUpdated: (path, features) {},
-  onCompleted: () {},
-  onError: (msg) {},
-);
-
-// --- Utilities ---
-await MusicFeatureAnalyzer.verifyPlatformSetup();
-MusicFeatureAnalyzer.getExtractionProgress(filePaths);
-MusicFeatureAnalyzer.getStats();
-MusicFeatureAnalyzer.isInitialized;
-await MusicFeatureAnalyzer.dispose();
-```
+| Method | Description |
+|--------|-------------|
+| `metadata(path)` | Get song metadata for one file. No `initialize()` needed. |
+| `extractMetadataBatch(paths)` | Get metadata for multiple files. |
+| `initialize()` | Load AI model. Required before analysis. |
+| `analyzeSong(song)` | Analyze one `SongModel`; returns `ExtractedSongFeatures?`. |
+| `analyzeSongs(songs)` | Analyze multiple songs. |
+| `extractFeaturesInBackground(paths, ...)` | Run analysis in a separate isolate; optional `durationMsByPath`, progress and completion callbacks. |
+| `verifyPlatformSetup()` | Check native setup (Android/iOS). |
+| `getStats()` | Analysis statistics. |
+| `getExtractionProgress(paths)` | Progress for background run. |
+| `dispose()` | Release resources. |
 
 ---
 
 ## How analysis works
 
-- **Short / no duration:** One ~0.975 s segment from the middle.
-- **Duration ≥ 30 s:** Three segments (middle of each third); numeric features = mean, genre/mood = from highest-confidence segment.
-- **Background:** `extractFeaturesInBackground` runs in a separate isolate so the UI stays responsive; each song can take several seconds. Duration is taken from file metadata when `durationMsByPath` is omitted.
+- **Metadata:** Read directly from the file via native APIs. No model load.
+- **Short / unknown duration:** One short segment from the middle.
+- **Duration ≥ 30 s:** Three segments (middle of each third); numeric features averaged, genre/mood from highest-confidence segment.
+- **Background:** `extractFeaturesInBackground` runs in an isolate; duration is read from file metadata when not provided.
 
 ---
 
-## Requirements & platform
+## Requirements
 
-- Flutter 3.0.0+, Dart 3.8.1+
-- Android API 21+, iOS 12.0+
-- **Supported:** Android, iOS only. No desktop/web.
+- **Flutter** 3.0.0+, **Dart** 3.8.1+
+- **Android** API 21+ · **iOS** 12.0+
+- **Platforms:** Android and iOS only (no desktop or web).
 
 **Formats:** MP3, WAV, FLAC, AAC, M4A, OGG, WMA, OPUS, AIFF, ALAC (and platform-supported formats).
 
-**Permissions:** Only if you read from device media library. See [BUILD_COMPATIBILITY.md](BUILD_COMPATIBILITY.md) for local path setup; [CHANGELOG.md](CHANGELOG.md) for history; [example/README.md](example/README.md) for integration.
-
-**Tests:** `flutter test`
+For media library access, configure permissions in your app. See [BUILD_COMPATIBILITY.md](BUILD_COMPATIBILITY.md) for setup; [CHANGELOG.md](CHANGELOG.md) for version history; [example/README.md](example/README.md) for a full demo.
 
 ---
 
-**Made with ❤️ by [P M JESIL](mailto:jxz101m@gmail.com)** · [Issues](https://github.com/jezeel/music_feature_analyzer/issues) · **License:** [MIT](LICENSE)
+## Links
+
+- [Pub.dev](https://pub.dev/packages/music_feature_analyzer)
+- [GitHub](https://github.com/jezeel/music_feature_analyzer)
+- [Issues](https://github.com/jezeel/music_feature_analyzer/issues)
+
+*Music Feature Analyzer* · MIT License · [P M JESIL](mailto:jxz101m@gmail.com)

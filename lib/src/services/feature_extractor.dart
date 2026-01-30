@@ -42,45 +42,22 @@ class FeatureExtractor {
   Future<bool> initialize() async {
     try {
       if (_isInitialized) {
-        _logger.d('✅ Already initialized');
         return true;
       }
-
-      _logger.i('🚀 Initializing Feature Extractor...');
-
-      // Check platform support - This package supports Android and iOS only
       if (!_isPlatformSupported()) {
-        _logger.e('❌ This package supports Android and iOS only');
-        _logger.e('❌ Current platform is not supported');
-        _logger.e('❌ Desktop and Web platforms are not supported');
-        _logger.e('❌ Please use this package on Android or iOS');
+        _logger.e('This package supports Android and iOS only');
         return false;
       }
-
-      // Load YAMNet model
-      _logger.d('📦 Loading YAMNet model from assets...');
       await _loadYAMNetModel();
-      _logger.i('✅ YAMNet model loaded');
-
-      // Log model details and validate
       _logModelDetails();
-
-      // Validate model compatibility
       if (!_validateModelCompatibility()) {
-        _logger.w('⚠️ Model compatibility issues detected - will use fallback mode');
+        _logger.w('Model compatibility issues - fallback mode may be used');
       }
-
-      // Load YAMNet labels
-      _logger.d('📋 Loading YAMNet labels...');
       await _loadYAMNetLabels();
-      _logger.i('✅ Loaded ${_yamnetLabels.length} YAMNet labels');
-
       _isInitialized = true;
-      _logger.i('✅ Initialization complete - Ready to extract features');
       return true;
     } catch (e, stackTrace) {
-      _logger.e('❌ Initialization failed: $e');
-      _logger.e('Stack trace: $stackTrace');
+      _logger.e('Initialization failed: $e', error: e, stackTrace: stackTrace);
       return false;
     }
   }
@@ -88,45 +65,29 @@ class FeatureExtractor {
   /// Extract features for a single song
   Future<ExtractedSongFeatures?> extractSongFeatures(SongModel song) async {
     if (!_isInitialized) {
-      _logger.e('❌ Feature Extractor not initialized');
+      _logger.e('Feature Extractor not initialized');
       return null;
     }
-
     final stopwatch = Stopwatch()..start();
     _totalSongs++;
-
     try {
-      _logger.i('🎵 Extracting features for: ${song.title}');
-      
-      // Extract audio data; use actual song duration when available for accurate middle-segment extraction
       final totalDuration = song.duration > 0 ? Duration(milliseconds: song.duration) : null;
       final audioData = await _extractAudioData(song.filePath, totalDuration: totalDuration);
       if (audioData == null) {
-        _logger.e('❌ Failed to extract audio data for: ${song.title}');
+        _logger.e('Failed to extract audio for: ${song.title}');
         _failedAnalyses++;
         return null;
       }
-
-      // Run YAMNet analysis
       final yamnetResults = _runYAMNetAnalysis(audioData);
-      
-      // Run signal processing
       final signalResults = await _runSignalProcessing(audioData);
-      
-      // Combine results
       final features = _combineResults(yamnetResults, signalResults, song);
-      
       _successfulAnalyses++;
       _updateStatistics(features);
-      
       stopwatch.stop();
       _totalAnalysisTime += stopwatch.elapsedMilliseconds / 1000.0;
-      
-      _logger.i('✅ Features extracted for: ${song.title} (${stopwatch.elapsedMilliseconds}ms)');
       return features;
-      
     } catch (e) {
-      _logger.e('❌ Error extracting features for ${song.title}: $e');
+      _logger.e('Error extracting features: ${song.title}', error: e);
       _failedAnalyses++;
       return null;
     }
@@ -135,7 +96,6 @@ class FeatureExtractor {
   /// Load YAMNet model
   Future<void> _loadYAMNetModel() async {
     try {
-      _logger.i('📱 Loading YAMNet model...');
       
       // Load model from package assets
       _yamnetModel = await Interpreter.fromAsset('packages/music_feature_analyzer/assets/models/1.tflite');
@@ -143,9 +103,8 @@ class FeatureExtractor {
       // Cache model bytes for isolates
       _cachedModelBytes = await _getModelBytes();
       
-      _logger.i('✅ YAMNet model loaded successfully');
     } catch (e) {
-      _logger.e('❌ Error loading YAMNet model: $e');
+      _logger.e('Error loading YAMNet model', error: e);
       rethrow;
     }
   }
@@ -159,14 +118,12 @@ class FeatureExtractor {
   /// Load YAMNet labels
   Future<void> _loadYAMNetLabels() async {
     try {
-      _logger.i('📋 Loading YAMNet labels...');
       
       final labelsData = await rootBundle.loadString('packages/music_feature_analyzer/assets/models/yamnet_class_map.csv');
       _yamnetLabels = _parseYAMNetLabels(labelsData);
       
-      _logger.i('✅ YAMNet labels loaded: ${_yamnetLabels.length} labels');
     } catch (e) {
-      _logger.e('❌ Error loading YAMNet labels: $e');
+      _logger.e('Error loading YAMNet labels', error: e);
       rethrow;
     }
   }
@@ -202,9 +159,6 @@ class FeatureExtractor {
   /// [totalDuration] when provided (e.g. from [SongModel.duration]) is used to pick a segment from the middle of the song for better accuracy.
   Future<Float32List?> _extractAudioData(String filePath, {Duration? totalDuration}) async {
     try {
-      _logger.d('🎵 Extracting audio data from: $filePath');
-      
-      // Use FFmpeg to extract audio data (same approach as original)
       final tempDir = await getTemporaryDirectory();
       final outputPath = '${tempDir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.raw';
       
@@ -223,35 +177,29 @@ class FeatureExtractor {
             await rawFile.delete(); // Clean up immediately
             
             if (rawBytes.isEmpty) {
-              _logger.w('FFmpeg output empty, using fallback');
+              _logger.w('FFmpeg output empty');
               return _extractFallbackWaveform(filePath);
             }
-            
             final waveform = _convertRawAudioToFloat32(rawBytes);
-            _logger.d('✅ Extracted ${waveform.length} samples');
             return waveform;
           } else {
-            _logger.w('⚠️ FFmpeg output file not found, using fallback');
+            _logger.w('FFmpeg output file not found');
             return _extractFallbackWaveform(filePath);
           }
         } catch (fileError) {
-          _logger.e('❌ Error reading FFmpeg output: $fileError');
-          // Ensure cleanup even on error
+          _logger.e('Error reading FFmpeg output', error: fileError);
           try {
             if (await rawFile.exists()) {
               await rawFile.delete();
             }
-          } catch (cleanupError) {
-            _logger.w('⚠️ Error cleaning up temp file: $cleanupError');
-          }
+          } catch (_) {}
           return _extractFallbackWaveform(filePath);
         }
       }
-      
-      _logger.w('⚠️ FFmpeg failed, using fallback');
+      _logger.w('FFmpeg failed');
       return _extractFallbackWaveform(filePath);
     } catch (e) {
-      _logger.e('❌ Error extracting audio data: $e');
+      _logger.e('Error extracting audio', error: e);
       return _extractFallbackWaveform(filePath);
     }
   }
@@ -323,10 +271,9 @@ class FeatureExtractor {
         waveform[i] = (fileBytes[byteIndex] - 128) / 128.0 * 0.5;
       }
       
-      _logger.d('✅ Generated fallback waveform: $totalSamples samples');
       return waveform;
     } catch (e) {
-      _logger.e('Fallback extraction failed: $e');
+      _logger.e('Fallback extraction failed', error: e);
       return null;
     }
   }
@@ -334,9 +281,6 @@ class FeatureExtractor {
   /// Run YAMNet analysis (same as original)
   YAMNetResults _runYAMNetAnalysis(Float32List audioData) {
     try {
-      _logger.d('🤖 Running YAMNet analysis...');
-      
-      // Prepare input (15,600 samples required by YAMNet - same as original)
       final inputWaveform = _prepareYAMNetInput(audioData);
       
       // Run inference with proper error handling (same as original)
@@ -347,23 +291,21 @@ class FeatureExtractor {
       try {
         _yamnetModel?.run(input, output);
       } catch (modelError) {
-        _logger.e('⛔ Model inference error: $modelError');
-        _logger.w('🔄 Falling back to signal processing only...');
+        _logger.e('Model inference failed', error: modelError);
         return _createFallbackResults(audioData);
       }
       
       // Extract and process scores (same as original)
       final scores = output[0] as List<double>?;
       if (scores == null || scores.isEmpty) {
-        _logger.e('❌ YAMNet output is null');
+        _logger.e('YAMNet output empty');
         return _createFallbackResults(audioData);
       }
       
       // Process scores to extract features (same as original)
       return _processYAMNetOutput(scores);
     } catch (e) {
-      _logger.e('⛔ YAMNet analysis error: $e');
-      _logger.w('🔄 Falling back to signal processing only...');
+      _logger.e('YAMNet analysis failed', error: e);
       return _createFallbackResults(audioData);
     }
   }
@@ -387,9 +329,6 @@ class FeatureExtractor {
   
   /// Create fallback results when YAMNet fails (same as original)
   YAMNetResults _createFallbackResults(Float32List waveform) {
-    _logger.i('🔄 Creating fallback features using signal processing...');
-    
-    // Calculate signal features for fallback
     final signalFeatures = _calculateSignalFeatures(waveform);
     
     // Enhanced fallback heuristics (same as original)
@@ -449,64 +388,37 @@ class FeatureExtractor {
     // Get top predictions (same as original)
     final topIndices = _getTopIndices(scores, 15);
     
-    _logger.d('🔍 YAMNet Debug - Top 15 indices: $topIndices');
-    _logger.d('🔍 YAMNet Debug - Top scores: ${topIndices.map((i) => scores[i]).toList()}');
-    
-    // If no indices found with threshold, try without threshold (same as original)
     if (topIndices.isEmpty) {
-      _logger.w('⚠️ No results with threshold, trying without threshold...');
       final allIndices = _getTopIndicesWithThreshold(scores, 15, 0.0);
-      _logger.d('🔍 YAMNet Debug - All indices (no threshold): $allIndices');
       topIndices.addAll(allIndices);
     }
-    
     for (final index in topIndices) {
       if (index >= _yamnetLabels.length) continue;
-      
       final label = _yamnetLabels[index];
       final score = scores[index];
-      
-      _logger.d('🔍 YAMNet Debug - Label: ${label.displayName} | Score: $score | isInstrument: ${label.isInstrument} | isVocal: ${label.isVocal} | isGenre: ${label.isGenre} | isMood: ${label.isMood}');
-      
-      if (label.isGenre) {
-        _logger.d('🎵 Genre candidate: ${label.displayName} (score: $score, current genre: $genre)');
-      }
-      
       const confidenceThreshold = 0.1;
       if (score < confidenceThreshold) continue;
-      
       confidenceSum += score;
       confidenceCount++;
-      
       if (label.isInstrument && instruments.length < 5 && score > 0.15) {
         instruments.add(label.displayName);
-        _logger.d('✅ Added instrument: ${label.displayName} (confidence: $score)');
       } else if (label.isVocal && score > 0.2) {
         hasVocals = true;
         vocalIntensity = math.max(vocalIntensity, score);
-        _logger.d('✅ Detected vocals: ${label.displayName} (confidence: $score)');
       } else if (label.isGenre && genre == 'Unknown' && score > 0.05) {
         genre = label.displayName;
-        _logger.d('✅ Detected genre: ${label.displayName} (confidence: $score)');
       } else if (label.isMood && moodTags.length < 3 && score > 0.15) {
         moodTags.add(label.displayName);
         moodScore = _moodTagToScore(label.displayName, score, moodScore);
-        _logger.d('✅ Added mood: ${label.displayName} (confidence: $score)');
       }
-      
       if (label.isEnergyRelated) {
         energy = (energy + score) / 2;
-        _logger.d('✅ Energy related: ${label.displayName} | Score: $score');
       }
     }
-    
     final confidence = confidenceCount > 0
         ? (confidenceSum / confidenceCount).clamp(0.0, 1.0)
         : 0.5;
     if (hasVocals && vocalIntensity <= 0) vocalIntensity = 0.5;
-    
-    _logger.d('🔍 YAMNet Debug - Final results: instruments=$instruments, hasVocals=$hasVocals, genre=$genre, energy=$energy, moodTags=$moodTags, moodScore=$moodScore, vocalIntensity=$vocalIntensity');
-    
     if (instruments.isEmpty) instruments.add('Unknown');
     if (moodTags.isEmpty) moodTags.add('Neutral');
     
@@ -1152,15 +1064,9 @@ class FeatureExtractor {
   /// Run signal processing analysis
   Future<SignalProcessingResults> _runSignalProcessing(Float32List audioData) async {
     try {
-      _logger.d('🔬 Running signal processing analysis...');
-      
-      // Perform signal processing directly
-      final results = _performSignalProcessing(audioData);
-      
-      _logger.d('✅ Signal processing completed');
-      return results;
+      return _performSignalProcessing(audioData);
     } catch (e) {
-      _logger.e('❌ Error in signal processing: $e');
+      _logger.e('Signal processing failed', error: e);
       return SignalProcessingResults.empty();
     }
   }
@@ -1455,23 +1361,7 @@ class FeatureExtractor {
 
   /// Log model details (same as original)
   void _logModelDetails() {
-    if (_yamnetModel == null) return;
-    
-    try {
-      _logger.d('📊 Model Input Details:');
-      _logger.d('  - Input Tensors: ${_yamnetModel!.getInputTensors().length}');
-      for (final tensor in _yamnetModel!.getInputTensors()) {
-        _logger.d('    * Shape: ${tensor.shape} | Type: ${tensor.type}');
-      }
-      
-      _logger.d('📊 Model Output Details:');
-      _logger.d('  - Output Tensors: ${_yamnetModel!.getOutputTensors().length}');
-      for (final tensor in _yamnetModel!.getOutputTensors()) {
-        _logger.d('    * Shape: ${tensor.shape} | Type: ${tensor.type}');
-      }
-    } catch (e) {
-      _logger.w('⚠️ Could not log model details: $e');
-    }
+    // Model details omitted for production; enable for debugging if needed.
   }
 
   /// Validate model compatibility (same as original)
@@ -1484,13 +1374,12 @@ class FeatureExtractor {
       
       // Check if we have the expected input/output structure (same as original)
       if (inputTensors.isEmpty || outputTensors.isEmpty) {
-        _logger.w('⚠️ Unexpected model structure');
+        _logger.w('Unexpected model structure');
         return false;
       }
-      
-      return true; // ✅ SIMPLE - Just checks if tensors exist (same as original)
+      return true;
     } catch (e) {
-      _logger.w('⚠️ Model validation error: $e');
+      _logger.w('Model validation failed', error: e);
       return false;
     }
   }
@@ -1500,7 +1389,6 @@ class FeatureExtractor {
     _yamnetModel?.close();
     _yamnetModel = null;
     _isInitialized = false;
-    _logger.i('🧹 Feature Extractor disposed');
   }
 
   /// Get model bytes for isolate processing
@@ -1520,9 +1408,6 @@ class FeatureExtractor {
       final tempDir = await getTemporaryDirectory();
       final outputPath = '${tempDir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.raw';
 
-      final startTime = _calculateMiddleStartTime(duration);
-      _logger.d('🎵 Extracting audio: duration=${duration.inSeconds}s, start=${startTime.toStringAsFixed(1)}s');
-
       // Build FFmpeg command with actual duration for accurate middle-segment extraction
       final command = _buildFFmpegCommand(filePath, outputPath, totalDuration: duration);
 
@@ -1538,35 +1423,29 @@ class FeatureExtractor {
             await rawFile.delete(); // Clean up immediately
 
             if (rawBytes.isEmpty) {
-              _logger.w('FFmpeg output empty, using fallback');
+              _logger.w('FFmpeg output empty');
               return _extractFallbackWaveform(filePath);
             }
-
             final waveform = _convertRawAudioToFloat32(rawBytes);
-            _logger.d('✅ Extracted ${waveform.length} samples');
             return waveform;
           } else {
-            _logger.w('⚠️ FFmpeg output file not found, using fallback');
+            _logger.w('FFmpeg output file not found');
             return _extractFallbackWaveform(filePath);
           }
         } catch (fileError) {
-          _logger.e('❌ Error reading FFmpeg output: $fileError');
-          // Ensure cleanup even on error
+          _logger.e('Error reading FFmpeg output', error: fileError);
           try {
             if (await rawFile.exists()) {
               await rawFile.delete();
             }
-          } catch (cleanupError) {
-            _logger.w('⚠️ Error cleaning up temp file: $cleanupError');
-          }
+          } catch (_) {}
           return _extractFallbackWaveform(filePath);
         }
       }
-
-      _logger.w('⚠️ FFmpeg failed, using fallback');
+      _logger.w('FFmpeg failed');
       return _extractFallbackWaveform(filePath);
     } catch (e) {
-      _logger.e('Error extracting audio: $e');
+      _logger.e('Error extracting audio', error: e);
       return _extractFallbackWaveform(filePath);
     }
   }

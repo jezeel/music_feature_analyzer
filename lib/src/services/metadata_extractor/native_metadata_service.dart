@@ -97,30 +97,13 @@ class NativeMetadataService {
   /// Returns connection status and how the dependency is loaded
   static Future<Map<String, dynamic>?> verifyConnection() async {
     try {
-      _logger.d('Verifying method channel connection...');
       final result = await platform.invokeMethod('verifyConnection');
-      
       if (result != null) {
         final info = result as Map<dynamic, dynamic>;
         final connected = info['connected'] as bool? ?? false;
         final channelName = info['channelName'] as String? ?? 'unknown';
         final loadingMode = info['loadingMode'] as String? ?? 'unknown';
         final handlerSet = info['handlerSet'] as bool? ?? false;
-        
-        _logger.i('✅ Connection verification successful:');
-        _logger.i('   Connected: $connected');
-        _logger.i('   Channel: $channelName');
-        _logger.i('   Loading Mode: $loadingMode');
-        _logger.i('   Handler Set: $handlerSet');
-        
-        if (loadingMode == loadingModePublished) {
-          _logger.i('📦 Plugin loaded as PUBLISHED PACKAGE (pub.dev)');
-          _logger.i('   ✅ Automatic registration should work');
-        } else if (loadingMode == loadingModeLocal) {
-          _logger.i('🔧 Plugin loaded as LOCAL PATH dependency');
-          _logger.i('   ⚙️ Manual registration may be needed in MainActivity');
-        }
-        
         return {
           'connected': connected,
           'channelName': channelName,
@@ -129,27 +112,13 @@ class NativeMetadataService {
         };
       }
       
-      _logger.w('Connection verification returned null');
       return null;
     } on PlatformException catch (e) {
-      _logger.e('PlatformException during connection verification: ${e.code} - ${e.message}', error: e);
-      
+      _logger.e('Platform connection failed: ${e.code} - ${e.message}', error: e);
       if (e.code == 'not_implemented' || 
           e.message?.contains('not implemented') == true ||
           e.message?.contains('MissingPluginException') == true) {
-        _logger.e('⚠️ Plugin not registered!');
-        _logger.w('═══════════════════════════════════════════════════════════════');
-        _logger.w('⚠️  PLUGIN REGISTRATION ISSUE');
-        _logger.w('═══════════════════════════════════════════════════════════════');
-        _logger.i('SOLUTION 1 (Published Package from pub.dev):');
-        _logger.i('  Plugin should auto-register. Try:');
-        _logger.i('  1. Run: flutter clean');
-        _logger.i('  2. Run: flutter pub get');
-        _logger.i('  3. Rebuild your app completely');
-        _logger.i('SOLUTION 2 (Local Path Dependency):');
-        _logger.i('  Manual registration may be needed');
-        _logger.i('  See BUILD_COMPATIBILITY.md for details');
-        _logger.w('═══════════════════════════════════════════════════════════════');
+        _logger.w('Plugin not registered. Run: flutter clean, flutter pub get, then rebuild. See BUILD_COMPATIBILITY.md');
       }
       
       return {
@@ -158,7 +127,7 @@ class NativeMetadataService {
         'code': e.code,
       };
     } catch (e, stackTrace) {
-      _logger.e('Unexpected error during connection verification: $e', error: e, stackTrace: stackTrace);
+      _logger.e('Connection verification failed: $e', error: e, stackTrace: stackTrace);
       return {
         'connected': false,
         'error': e.toString(),
@@ -169,63 +138,25 @@ class NativeMetadataService {
   /// Get metadata from audio file using native MediaMetadataRetriever
   static Future<AudioMetadata?> getMetadata(String filePath) async {
     try {
-      // Debug logging (matching working implementation pattern)
-      _logger.d('Calling getMetadata for: $filePath');
-      
       final result = await platform.invokeMethod('getMetadata', {
         'path': filePath,
       });
-      
-      _logger.d('Received result: ${result != null ? "not null" : "null"}');
-
       if (result != null) {
         final map = result as Map<dynamic, dynamic>;
-        
-        // Check if native code returned an error
         if (map.containsKey('error')) {
           final errorMsg = map['error'] as String?;
-          _logger.w('Native platform returned error: $errorMsg');
-          // Return null so caller can use filename parsing fallback
-          // The error is already logged in Android logcat (tag: MusicFeatureAnalyzer)
+          _logger.w('Native metadata error: $errorMsg');
           return null;
         }
-        
-        _logger.i('Successfully parsed metadata');
-        _logger.d('Metadata keys: ${map.keys.toList()}');
-        _logger.d('Title: ${map['title']}, Artist: ${map['artist']}, Duration: ${map['duration']}');
-        
-        // Always return metadata if we have any data (even if just fileSize/mimeType)
-        // The Android plugin always returns at least fileSize and mimeType
-        // This matches the working implementation pattern
         return AudioMetadata.fromMap(map);
       }
-      
-      _logger.w('Result is null');
       return null;
     } on PlatformException catch (e) {
-      // Platform exception means method channel not set up or error occurred
-      _logger.e('PlatformException: ${e.code} - ${e.message}', error: e, stackTrace: StackTrace.current);
-      _logger.d('Details: ${e.details}');
-      
-      // Check if it's a MissingPluginException (plugin not registered)
+      _logger.e('getMetadata failed: ${e.code} - ${e.message}', error: e, stackTrace: StackTrace.current);
       if (e.code == 'not_implemented' || 
           e.message?.contains('not implemented') == true ||
           e.message?.contains('MissingPluginException') == true) {
-        _logger.e('Plugin not registered! Attempting to provide setup instructions...');
-        _logger.w('═══════════════════════════════════════════════════════════════');
-        _logger.w('⚠️  PLUGIN REGISTRATION ISSUE');
-        _logger.w('═══════════════════════════════════════════════════════════════');
-        _logger.w('The MusicFeatureAnalyzerPlugin is not registered.');
-        _logger.i('SOLUTION 1 (Published Package from pub.dev):');
-        _logger.i('  The plugin should register automatically. Try:');
-        _logger.i('  1. Run: flutter clean');
-        _logger.i('  2. Run: flutter pub get');
-        _logger.i('  3. Rebuild your app completely');
-        _logger.i('  4. Verify GeneratedPluginRegistrant includes the plugin');
-        _logger.i('SOLUTION 2 (Local Path Dependency):');
-        _logger.i('  Manual registration may be needed. See BUILD_COMPATIBILITY.md');
-        _logger.w('═══════════════════════════════════════════════════════════════');
-        
+        _logger.w('Plugin not registered. See BUILD_COMPATIBILITY.md');
         throw PlatformException(
           code: 'PLUGIN_NOT_REGISTERED',
           message: 'MusicFeatureAnalyzerPlugin is not registered.\n\n'
@@ -244,8 +175,7 @@ class NativeMetadataService {
       }
       return null;
     } catch (e, stackTrace) {
-      // Unexpected error
-      _logger.e('Unexpected error: $e', error: e, stackTrace: stackTrace);
+      _logger.e('getMetadata error: $e', error: e, stackTrace: stackTrace);
       return null;
     }
   }
@@ -253,7 +183,6 @@ class NativeMetadataService {
   /// Get embedded album art from audio file
   static Future<Uint8List?> getAlbumArt(String filePath) async {
     try {
-      _logger.d('Calling getAlbumArt for: $filePath');
       final result = await platform.invokeMethod('getAlbumArt', {
         'path': filePath,
       });
@@ -288,18 +217,15 @@ class NativeMetadataService {
   /// Get MIME type of embedded album art
   static Future<String?> getAlbumArtMimeType(String filePath) async {
     try {
-      _logger.d('Calling getAlbumArtMimeType for: $filePath');
       final result = await platform.invokeMethod('getAlbumArtMimeType', {
         'path': filePath,
       });
-      final mimeType = result as String?;
-      _logger.i('getAlbumArtMimeType returned: ${mimeType ?? "null"}');
-      return mimeType;
+      return result as String?;
     } on PlatformException catch (e) {
-      _logger.e('PlatformException in getAlbumArtMimeType: ${e.code} - ${e.message}', error: e);
+      _logger.e('getAlbumArtMimeType failed: ${e.code} - ${e.message}', error: e);
       return null;
-    } catch (e) {
-      _logger.e('Unexpected error in getAlbumArtMimeType: $e', error: e);
+    } catch (e, stackTrace) {
+      _logger.e('getAlbumArtMimeType error: $e', error: e, stackTrace: stackTrace);
       return null;
     }
   }

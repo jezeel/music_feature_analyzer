@@ -26,9 +26,8 @@ import 'services/metadata_extractor/native_metadata_service.dart';
 /// 
 /// ANALYSIS BEHAVIOUR:
 /// - Short songs or when duration is unknown: one short segment (~0.975 s) from the middle.
-/// - When duration is known and >= 30 s: the song is split into 4 equal parts; a short segment
-///   at the middle of each part (1/8, 3/8, 5/8, 7/8 of length) is analysed separately, and
-///   mean values are used for numeric features; categorical (genre, mood) use the highest-confidence segment.
+/// - When duration is known and >= 30 s: three segments at the middle of each third (D/6, D/2, 5D/6)
+///   are analysed; numeric features are averaged, categorical (genre, mood) use the highest-confidence segment.
 /// Duration is auto-fetched from metadata when you call [extractFeaturesInBackground] without
 /// [durationMsByPath], using the existing [MetadataExtractor].
 /// 
@@ -61,33 +60,25 @@ class MusicFeatureAnalyzer {
     try {
       // Check platform support - Android and iOS only
       if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) {
-        _logger.e('❌ This package supports Android and iOS only');
-        _logger.e('❌ Current platform is not supported');
+        _logger.e('This package supports Android and iOS only');
+        _logger.e('Current platform is not supported');
         return false;
       }
       
       if (_isInitialized) {
-        _logger.d('✅ Already initialized');
         return true;
       }
 
-      _logger.i('🚀 Initializing Music Feature Analyzer...');
-      
-      // Initialize the feature extractor
       _extractor = FeatureExtractor();
       final success = await _extractor!.initialize();
-      
       if (success) {
         _isInitialized = true;
-        _logger.i('✅ Music Feature Analyzer initialized successfully');
         return true;
-      } else {
-        _logger.e('❌ Failed to initialize feature extractor');
-        return false;
       }
+      _logger.e('Failed to initialize feature extractor');
+      return false;
     } catch (e, stackTrace) {
-      _logger.e('❌ Initialization failed: $e');
-      _logger.e('Stack trace: $stackTrace');
+      _logger.e('Initialization failed: $e', error: e, stackTrace: stackTrace);
       return false;
     }
   }
@@ -95,15 +86,13 @@ class MusicFeatureAnalyzer {
   /// Analyze a single song
   static Future<ExtractedSongFeatures?> analyzeSong(SongModel song) async {
     if (!_isInitialized || _extractor == null) {
-      _logger.e('❌ Analyzer not initialized. Call initialize() first.');
+      _logger.e('Analyzer not initialized. Call initialize() first.');
       return null;
     }
-
     try {
-      _logger.i('🎵 Analyzing song: ${song.title}');
       return await _extractor!.extractSongFeatures(song);
     } catch (e) {
-      _logger.e('❌ Error analyzing song: $e');
+      _logger.e('Error analyzing song: $e', error: e);
       return null;
     }
   }
@@ -111,12 +100,10 @@ class MusicFeatureAnalyzer {
   /// Analyze multiple songs
   static Future<List<ExtractedSongFeatures?>> analyzeSongs(List<SongModel> songs) async {
     if (!_isInitialized || _extractor == null) {
-      _logger.e('❌ Analyzer not initialized. Call initialize() first.');
+      _logger.e('Analyzer not initialized. Call initialize() first.');
       return [];
     }
-
     try {
-      _logger.i('🎵 Analyzing ${songs.length} songs');
       final results = <ExtractedSongFeatures?>[];
       
       for (final song in songs) {
@@ -126,7 +113,7 @@ class MusicFeatureAnalyzer {
       
       return results;
     } catch (e) {
-      _logger.e('❌ Error analyzing songs: $e');
+      _logger.e('Error analyzing songs: $e', error: e);
       return [];
     }
   }
@@ -135,24 +122,14 @@ class MusicFeatureAnalyzer {
   /// Returns SongModel with all metadata fields populated (features will be null)
   static Future<SongModel?> metadata(String filePath) async {
     try {
-      _logger.i('📋 Extracting metadata from: $filePath');
-      
-      // Initialize metadata extractor if needed
       await MetadataExtractor.initialize();
-      
-      // Extract metadata
       final song = await MetadataExtractor.extractMetadata(filePath);
-      
-      if (song != null) {
-        _logger.i('✅ Metadata extracted successfully: ${song.title}');
-      } else {
-        _logger.w('⚠️ Failed to extract metadata from: $filePath');
+      if (song == null) {
+        _logger.w('Failed to extract metadata: $filePath');
       }
-      
       return song;
     } catch (e, stackTrace) {
-      _logger.e('❌ Error extracting metadata: $e');
-      _logger.e('Stack trace: $stackTrace');
+      _logger.e('Error extracting metadata: $e', error: e, stackTrace: stackTrace);
       return null;
     }
   }
@@ -160,7 +137,6 @@ class MusicFeatureAnalyzer {
   /// Extract metadata from multiple audio files
   static Future<List<SongModel?>> extractMetadataBatch(List<String> filePaths) async {
     try {
-      _logger.i('📋 Extracting metadata from ${filePaths.length} files');
       
       // Initialize metadata extractor if needed
       await MetadataExtractor.initialize();
@@ -174,7 +150,7 @@ class MusicFeatureAnalyzer {
       
       return results;
     } catch (e) {
-      _logger.e('❌ Error extracting metadata batch: $e');
+      _logger.e('Error extracting metadata batch: $e', error: e);
       return [];
     }
   }
@@ -194,35 +170,20 @@ class MusicFeatureAnalyzer {
     Function(String error)? onError,
   }) async {
     if (_isBackgroundProcessing) {
-      _logger.w('⚠️ Feature extraction already in progress');
+      _logger.w('Feature extraction already in progress');
       return {};
     }
-
     if (!_isInitialized || _extractor == null) {
-      _logger.e('❌ Analyzer not initialized. Call initialize() first.');
+      _logger.e('Analyzer not initialized. Call initialize() first.');
       return {};
     }
-
     _isBackgroundProcessing = true;
-    _logger.i('🎵 Starting UI-responsive background feature extraction for ${filePaths.length} songs...');
-    
     try {
-      // Filter songs that need analysis (same as original)
-      final songsNeedingAnalysis = filePaths.where((filePath) {
-        // For now, assume all songs need analysis
-        // In a real implementation, you'd check if features already exist
-        return true;
-      }).toList();
-
+      final songsNeedingAnalysis = filePaths.where((_) => true).toList();
       if (songsNeedingAnalysis.isEmpty) {
-        _logger.i('✅ All songs already analyzed');
         onCompleted?.call();
         return {};
       }
-
-      _logger.i('🎵 Found ${songsNeedingAnalysis.length} songs needing analysis');
-
-      // Process songs with UI responsiveness; pass durations when available for accuracy
       final results = await _processSongsWithUIResponsiveness(
         songsNeedingAnalysis,
         onSongUpdated,
@@ -230,11 +191,10 @@ class MusicFeatureAnalyzer {
         durationMsByPath: durationMsByPath,
       );
       
-      _logger.i('✅ UI-responsive background extraction completed');
       onCompleted?.call();
       return results;
     } catch (e) {
-      _logger.e('❌ Error in UI-responsive background extraction: $e');
+      _logger.e('Background extraction failed: $e', error: e);
       onError?.call(e.toString());
       return {};
     } finally {
@@ -323,7 +283,6 @@ class MusicFeatureAnalyzer {
   /// print('Code: ${instructions['code']}');
   /// ```
   static Map<String, dynamic> getPermissionInstructions() {
-    _logger.i('📱 Getting permission instructions...');
     return PermissionHelper.getPermissionInstructions();
   }
 
@@ -358,7 +317,6 @@ class MusicFeatureAnalyzer {
   /// }
   /// ```
   static Future<Map<String, dynamic>> verifyPlatformSetup() async {
-    _logger.i('🔍 Verifying platform setup...');
     
     final isWeb = kIsWeb;
     final isAndroid = !isWeb && Platform.isAndroid;
@@ -418,7 +376,6 @@ class MusicFeatureAnalyzer {
         status['isConfigured'] = true;
         status['message'] = '✅ Platform setup verified successfully';
         status['nativeCode'] = 'Registered';
-        _logger.i('✅ Platform setup verified - native code is registered');
       } else {
         status['issues'].add('Method channel not registered');
         status['issues'].add('Plugin may not be registered automatically');
@@ -429,8 +386,7 @@ class MusicFeatureAnalyzer {
         status['suggestions'].add('Verify GeneratedPluginRegistrant includes the plugin');
         status['message'] = '⚠️ Platform setup incomplete - native code not registered';
         status['nativeCode'] = 'Not registered';
-        _logger.w('⚠️ Platform setup incomplete - method channel not registered');
-        _logger.w('See PLATFORM_SETUP_GUIDE.md for setup instructions');
+        _logger.w('Platform setup incomplete - method channel not registered. See BUILD_COMPATIBILITY.md');
       }
     } on PlatformException catch (e) {
       if (e.code == 'not_implemented') {
@@ -444,12 +400,12 @@ class MusicFeatureAnalyzer {
         status['suggestions'].add('Check PLATFORM_SETUP_GUIDE.md for setup instructions');
         status['message'] = '❌ Error verifying platform setup';
       }
-      _logger.e('Error verifying setup: ${e.message}');
+      _logger.e('Platform setup verification failed: ${e.message}', error: e);
     } catch (e) {
       status['issues'].add('Unexpected error: $e');
       status['suggestions'].add('Check PLATFORM_SETUP_GUIDE.md for setup instructions');
       status['message'] = '❌ Error verifying platform setup';
-      _logger.e('Unexpected error verifying setup: $e');
+      _logger.e('Platform setup verification failed: $e', error: e);
     }
 
     return status;
@@ -476,7 +432,6 @@ class MusicFeatureAnalyzer {
   /// print('Loading Mode: ${connection['loadingMode']}');
   /// ```
   static Future<Map<String, dynamic>> verifyConnection() async {
-    _logger.i('🔍 Verifying method channel connection...');
     
     final result = await NativeMetadataService.verifyConnection();
     
@@ -558,7 +513,6 @@ class MusicFeatureAnalyzer {
       _extractor = null;
     }
     _isInitialized = false;
-    _logger.i('🧹 Music Feature Analyzer disposed');
   }
 
   /// Extract filename from path
@@ -1279,7 +1233,6 @@ class MusicFeatureAnalyzer {
         // Call progress callback
         onProgress?.call(i + 1, filePaths.length);
         
-        _logger.i('🎵 Processing song ${i + 1}/${filePaths.length}: $filePath');
         
         // Use isolate for heavy processing (audio + 3-part analysis when duration available)
         final features = await _extractFeaturesInIsolate(filePath, durationMs: durationMs);
@@ -1290,16 +1243,15 @@ class MusicFeatureAnalyzer {
         onSongUpdated?.call(filePath, features);
         
         if (features != null) {
-          _logger.d('✅ Features extracted for: ${_getFileName(filePath)}');
         } else {
-          _logger.w('⚠️ Failed to extract features for: ${_getFileName(filePath)}');
+          _logger.w('Failed to extract features: ${_getFileName(filePath)}');
         }
         
         // Allow UI to update by yielding control (same as original)
         await Future.delayed(Duration.zero);
         
       } catch (e) {
-        _logger.e('❌ Error processing song $filePath: $e');
+        _logger.e('Error processing song: $filePath', error: e);
         results[filePath] = null;
         onSongUpdated?.call(filePath, null);
       }
@@ -1317,7 +1269,7 @@ class MusicFeatureAnalyzer {
       final modelBytes = _extractor?.getModelBytes();
       final labels = _extractor?.getLabels();
       if (modelBytes == null || labels == null) {
-        _logger.e('❌ Model or labels not available - ensure initialize() was called');
+        _logger.e('Model or labels not available - ensure initialize() was called');
         return null;
       }
 
@@ -1348,7 +1300,7 @@ class MusicFeatureAnalyzer {
       final hasAudio = (preExtractedAudios != null && preExtractedAudios.isNotEmpty) ||
           (preExtractedAudio != null);
       if (!hasAudio) {
-        _logger.w('⚠️ No audio extracted for: ${_getFileName(filePath)}');
+        _logger.w('No audio extracted for: ${_getFileName(filePath)}');
         return null;
       }
 
@@ -1502,25 +1454,20 @@ class MusicFeatureAnalyzer {
     try {
       // Use pre-processed audio data
       if (audioData == null) {
-        _logger.w('⚠️ No pre-processed audio data available for ${song.title}');
+        _logger.w('No pre-processed audio for: ${song.title}');
         return null;
       }
 
-      _logger.d('🤖 Running YAMNet analysis in isolate for: ${song.title}');
       
       // Run YAMNet inference (SAME AS ORIGINAL)
       final yamnetResults = await _runYAMNetInference(interpreter, audioData);
       
-      _logger.d('🔍 YAMNet results: ${yamnetResults.length} scores, top 5: ${yamnetResults.take(5).toList()}');
-      
-      // Process YAMNet results (SAME AS ORIGINAL)
+      // Process YAMNet results
       final yamnetFeatures = _processYAMNetResultsInIsolate(yamnetResults, yamnetLabels);
       
       // Calculate real signal features (SAME AS ORIGINAL)
       final signalFeatures = _calculateSignalFeaturesInIsolate(audioData);
       
-      _logger.d('🎵 Processed features: genre=${yamnetFeatures['genre']}, instruments=${yamnetFeatures['instruments']}, hasVocals=${yamnetFeatures['hasVocals']}');
-      _logger.d('🎵 Signal features: tempo=${signalFeatures.tempoBpm}, energy=${signalFeatures.energy}, spectralCentroid=${signalFeatures.spectralCentroid}');
       
       // Create comprehensive features (SAME AS ORIGINAL)
       final yamnetEnergyVal = (yamnetFeatures['energyValue'] as num).toDouble().clamp(0.0, 1.0);
@@ -1568,10 +1515,9 @@ class MusicFeatureAnalyzer {
         analyzedAt: DateTime.now(),
       );
 
-      _logger.d('✅ Created ExtractedSongFeatures: genre=${songFeatures.estimatedGenre}, tempo=${songFeatures.tempoBpm}');
       return songFeatures;
     } catch (e) {
-      _logger.e('❌ Error extracting features for ${song.title}: $e');
+      _logger.e('Error extracting features: ${song.title}', error: e);
       return null;
     }
   }
@@ -1592,7 +1538,7 @@ class MusicFeatureAnalyzer {
       
       return output[0];
     } catch (e) {
-      _logger.e('❌ Error running YAMNet inference: $e');
+      _logger.e('YAMNet inference failed', error: e);
       return List.filled(521, 0.0);
     }
   }

@@ -32,14 +32,15 @@ public class MusicFeatureAnalyzerPlugin: NSObject, FlutterPlugin {
                 "loadingMode": "IOS_PLATFORM",
                 "handlerSet": channel != nil,
                 "platform": "iOS",
-                "pluginVersion": "1.0.1-beta-07"
+                "pluginVersion": "1.0.1"
             ]
             result(response)
             return
         }
 
         guard let arguments = call.arguments as? [String: Any],
-              let path = arguments["path"] as? String else {
+              let path = arguments["path"] as? String,
+              !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             result(FlutterError(code: "INVALID_ARGUMENT",
                                 message: "File path is required",
                                 details: nil))
@@ -61,43 +62,55 @@ public class MusicFeatureAnalyzerPlugin: NSObject, FlutterPlugin {
     private func getMetadata(filePath: String, result: @escaping FlutterResult) {
         DispatchQueue.global(qos: .userInitiated).async {
             var metadata: [String: Any?] = [:]
-            let fileManager = FileManager.default
-
-            guard fileManager.fileExists(atPath: filePath) else {
-                metadata["error"] = "File does not exist: \(filePath)"
-                metadata["mimeType"] = self.getMimeTypeFromExtension(filePath: filePath)
-                DispatchQueue.main.async { result(metadata) }
-                return
-            }
 
             do {
-                if let fileSize = try fileManager.attributesOfItem(atPath: filePath)[.size] as? UInt64 {
-                    metadata["fileSize"] = Int(min(fileSize, UInt64(Int32.max)))
+                let fileManager = FileManager.default
+                guard fileManager.fileExists(atPath: filePath) else {
+                    metadata["error"] = "File does not exist: \(filePath)"
+                    metadata["mimeType"] = self.getMimeTypeFromExtension(filePath: filePath)
+                    DispatchQueue.main.async { result(metadata) }
+                    return
                 }
+
+                do {
+                    if let fileSize = try fileManager.attributesOfItem(atPath: filePath)[.size] as? UInt64 {
+                        metadata["fileSize"] = Int(min(fileSize, UInt64(Int32.max)))
+                    }
+                } catch {
+                    metadata["fileSize"] = nil
+                }
+
+                let fileURL = URL(fileURLWithPath: filePath)
+                let asset = AVAsset(url: fileURL)
+
+                let duration = asset.duration
+                let durationInSeconds = CMTimeGetSeconds(duration)
+                if durationInSeconds.isFinite && !durationInSeconds.isNaN && durationInSeconds >= 0 {
+                    metadata["duration"] = Int64(durationInSeconds * 1000)
+                } else {
+                    metadata["duration"] = nil
+                }
+
+                let common = extractCommonMetadata(from: asset)
+                metadata.merge(sanitizeMetadata(common)) { _, new in new }
+
+                // estimatedDataRate is in bits/sec; convert to kbps for Dart contract
+                if let track = asset.tracks(withMediaType: .audio).first {
+                    let bps = track.estimatedDataRate
+                    metadata["bitrate"] = bps > 0 ? Int(bps / 1000) : nil
+                }
+
+                metadata["mimeType"] = self.getMimeTypeFromExtension(filePath: filePath)
+                metadata["hasAlbumArt"] = self.hasAlbumArt(in: asset)
+
+                DispatchQueue.main.async { result(metadata) }
             } catch {
-                metadata["fileSize"] = nil
+                metadata["error"] = "Exception in getMetadata: \(error.localizedDescription)"
+                if metadata["mimeType"] == nil {
+                    metadata["mimeType"] = self.getMimeTypeFromExtension(filePath: filePath)
+                }
+                DispatchQueue.main.async { result(metadata) }
             }
-
-            let fileURL = URL(fileURLWithPath: filePath)
-            let asset = AVAsset(url: fileURL)
-
-            let duration = asset.duration
-            let durationInSeconds = CMTimeGetSeconds(duration)
-            metadata["duration"] = Int64(durationInSeconds * 1000)
-
-            let common = extractCommonMetadata(from: asset)
-            metadata.merge(sanitizeMetadata(common)) { _, new in new }
-
-            // estimatedDataRate is in bits/sec; convert to kbps for Dart contract
-            if let track = asset.tracks(withMediaType: .audio).first {
-                let bps = track.estimatedDataRate
-                metadata["bitrate"] = bps > 0 ? Int(bps / 1000) : nil
-            }
-
-            metadata["mimeType"] = self.getMimeTypeFromExtension(filePath: filePath)
-            metadata["hasAlbumArt"] = self.hasAlbumArt(in: asset)
-
-            DispatchQueue.main.async { result(metadata) }
         }
     }
 

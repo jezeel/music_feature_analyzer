@@ -4,7 +4,6 @@ import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import androidx.annotation.NonNull
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
@@ -16,25 +15,19 @@ import java.util.concurrent.Executors
 
 /** MusicFeatureAnalyzerPlugin */
 class MusicFeatureAnalyzerPlugin : FlutterPlugin, MethodCallHandler {
-    private val TAG = "MusicFeatureAnalyzerPlugin"
     private lateinit var channel: MethodChannel
     private lateinit var context: Context
     private val handler = Handler(Looper.getMainLooper())
     private val executor = Executors.newCachedThreadPool()
 
     override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
-        Log.i(TAG, "onAttachedToEngine: Attaching MusicFeatureAnalyzerPlugin")
         channel = MethodChannel(flutterPluginBinding.binaryMessenger, "com.music_feature_analyzer/audio_metadata")
         channel.setMethodCallHandler(this)
         context = flutterPluginBinding.applicationContext
-        Log.i(TAG, "onAttachedToEngine: Channel initialized")
     }
 
     override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
         if (call.method == "verifyConnection") {
-            // Log that we received the verification call
-            Log.i(TAG, "verifyConnection: Received verification request")
-            
             val loadingMode = detectLoadingMode()
             val response = mapOf(
                 "connected" to true,
@@ -42,16 +35,19 @@ class MusicFeatureAnalyzerPlugin : FlutterPlugin, MethodCallHandler {
                 "loadingMode" to loadingMode.name,
                 "handlerSet" to true,
                 "platform" to "Android",
-                "pluginVersion" to "1.0.1-beta-07"
+                "pluginVersion" to "1.0.1"
             )
             result.success(response)
-            Log.i(TAG, "verifyConnection: Responded success")
             return
         }
 
         val path = call.argument<String>("path")
         if (path == null) {
             result.error("INVALID_ARGUMENT", "File path is required", null)
+            return
+        }
+        if (path.isBlank()) {
+            result.error("INVALID_ARGUMENT", "File path cannot be blank", null)
             return
         }
 
@@ -64,7 +60,6 @@ class MusicFeatureAnalyzerPlugin : FlutterPlugin, MethodCallHandler {
     }
 
     override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
-        Log.i(TAG, "onDetachedFromEngine: Detaching MusicFeatureAnalyzerPlugin")
         channel.setMethodCallHandler(null)
     }
 
