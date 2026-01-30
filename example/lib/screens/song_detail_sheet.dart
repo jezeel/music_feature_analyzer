@@ -360,6 +360,11 @@ class _SongDetailSheetState extends State<SongDetailSheet>
         'icon': Icons.music_note_rounded
       },
       {
+        'name': 'Loudness',
+        'value': AppUtils.validateAndFormatDouble(features.loudness, 0.0, 1.0),
+        'icon': Icons.volume_up_rounded
+      },
+      {
         'name': 'Confidence',
         'value': AppUtils.validateAndFormatDouble(features.confidence, 0.0, 1.0),
         'icon': Icons.psychology_rounded

@@ -34,6 +34,10 @@ dependencies:
   # File Picker
   file_picker: ^8.1.4
 
+  # Permissions (Android version-based + iOS)
+  permission_handler: ^11.3.1
+  device_info_plus: ^11.0.0
+
   # Additional UI Dependencies
   lottie: ^3.1.2
   shimmer: ^3.0.0

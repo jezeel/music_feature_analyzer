@@ -3,6 +3,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:music_feature_analyzer/music_feature_analyzer.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:io';
 import '../utils/app_logger.dart';
 import '../utils/app_utils.dart';
@@ -24,13 +26,55 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, ExtractedSongFeatures> _songFeatures = {};
   Map<String, bool> _extractingMetadata = {};
   Map<String, bool> _extractingFeatures = {};
+  bool _isLoadingMetadata = false;
 
   static const int _maxSongs = 100;
 
   @override
   void initState() {
     super.initState();
-    _checkInitialization();
+    _requestPermissions().then((_) => _checkInitialization());
+  }
+
+  /// Request storage/audio permissions based on platform and Android version.
+  /// Android 13+ (API 33+): READ_MEDIA_AUDIO. Android 12 and below: READ_EXTERNAL_STORAGE.
+  /// iOS: Media Library (NSAppleMusicUsageDescription / NSMediaLibraryUsageDescription).
+  Future<void> _requestPermissions() async {
+    try {
+      if (Platform.isAndroid) {
+        final deviceInfo = DeviceInfoPlugin();
+        final androidInfo = await deviceInfo.androidInfo;
+        final sdkInt = androidInfo.version.sdkInt;
+        _logger.i('Android SDK: $sdkInt - requesting appropriate permission');
+        if (sdkInt >= 33) {
+          final status = await Permission.audio.request();
+          if (status.isPermanentlyDenied) {
+            _logger.w('Audio permission permanently denied - user may need to open app settings');
+            await openAppSettings();
+          } else if (status.isGranted) {
+            _logger.i('READ_MEDIA_AUDIO granted (Android 13+)');
+          }
+        } else {
+          final status = await Permission.storage.request();
+          if (status.isPermanentlyDenied) {
+            _logger.w('Storage permission permanently denied - user may need to open app settings');
+            await openAppSettings();
+          } else if (status.isGranted) {
+            _logger.i('READ_EXTERNAL_STORAGE granted (Android 12-)');
+          }
+        }
+      } else if (Platform.isIOS) {
+        final status = await Permission.mediaLibrary.request();
+        if (status.isPermanentlyDenied) {
+          _logger.w('Media library permission permanently denied');
+          await openAppSettings();
+        } else if (status.isGranted) {
+          _logger.i('Media library permission granted (iOS)');
+        }
+      }
+    } catch (e) {
+      _logger.e('Error requesting permissions: $e');
+    }
   }
 
   void _checkInitialization() {
@@ -95,28 +139,33 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
         ],
       ),
-      body: _songs.isEmpty
-          ? _buildEmptyState()
-          : Column(
-              children: [
-                Expanded(
-                  child: ListView.builder(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 16.w,
-                      vertical: 8.h,
+      body: Stack(
+        children: [
+          _songs.isEmpty
+              ? _buildEmptyState()
+              : Column(
+                  children: [
+                    Expanded(
+                      child: ListView.builder(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 16.w,
+                          vertical: 8.h,
+                        ),
+                        itemCount: _songs.length,
+                        itemBuilder: (context, index) {
+                          final song = _songs[index];
+                          final features = _songFeatures[song.id];
+                          final isExtracting =
+                              _extractingMetadata[song.filePath] ?? false;
+                          return _buildSongCard(song, features, isExtracting);
+                        },
+                      ),
                     ),
-                    itemCount: _songs.length,
-                    itemBuilder: (context, index) {
-                      final song = _songs[index];
-                      final features = _songFeatures[song.id];
-                      final isExtracting =
-                          _extractingMetadata[song.filePath] ?? false;
-                      return _buildSongCard(song, features, isExtracting);
-                    },
-                  ),
+                  ],
                 ),
-              ],
-            ),
+          if (_isLoadingMetadata) _buildLoadingOverlay(),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _songs.length < _maxSongs ? _showSelectionDialog : null,
         icon: const Icon(Icons.add_rounded),
@@ -164,6 +213,44 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingOverlay() {
+    return Container(
+      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.85),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 56.w,
+              height: 56.w,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            SizedBox(height: 24.h),
+            Text(
+              'Loading songs...',
+              style: GoogleFonts.poppins(
+                fontSize: 18.sp,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            SizedBox(height: 8.h),
+            Text(
+              'Extracting metadata',
+              style: GoogleFonts.poppins(
+                fontSize: 14.sp,
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -376,11 +463,13 @@ class _HomeScreenState extends State<HomeScreen> {
             .take(remainingSlots)
             .toList();
 
-        _extractMetadataForFiles(filePaths);
+        setState(() => _isLoadingMetadata = true);
+        await _extractMetadataForFiles(filePaths);
       }
     } catch (e) {
       _logger.e('Error selecting music files: $e');
       _showSnackBar('Error selecting files: $e', Colors.red);
+      if (mounted) setState(() => _isLoadingMetadata = false);
     }
   }
 
@@ -391,19 +480,30 @@ class _HomeScreenState extends State<HomeScreen> {
       if (result != null) {
         final directory = Directory(result);
         final remainingSlots = _maxSongs - _songs.length;
-        final audioFiles = await directory
-            .list()
-            .where((entity) => entity is File && _isAudioFile(entity.path))
-            .cast<File>()
-            .take(remainingSlots)
-            .toList();
 
-        final filePaths = audioFiles.map((file) => file.path).toList();
-        _extractMetadataForFiles(filePaths);
+        // Build list of audio file paths line by line (scan folder, optionally subfolders)
+        final List<String> filePaths = [];
+        await for (final entity in directory.list(recursive: true)) {
+          if (filePaths.length >= remainingSlots) break;
+          if (entity is File && _isAudioFile(entity.path)) {
+            filePaths.add(entity.path);
+            _logger.d('Found audio: ${entity.path}');
+          }
+        }
+
+        if (filePaths.isEmpty) {
+          _showSnackBar('No audio files found in this folder', Colors.orange);
+          return;
+        }
+
+        _logger.i('Folder: ${filePaths.length} audio file(s) to process');
+        setState(() => _isLoadingMetadata = true);
+        await _extractMetadataForFiles(filePaths);
       }
     } catch (e) {
       _logger.e('Error selecting music folder: $e');
       _showSnackBar('Error selecting folder: $e', Colors.red);
+      if (mounted) setState(() => _isLoadingMetadata = false);
     }
   }
 
@@ -418,20 +518,23 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (newFilePaths.isEmpty) {
       _logger.w('No new files to process');
+      if (mounted) setState(() => _isLoadingMetadata = false);
       return;
     }
 
     // Mark all files as extracting
-    setState(() {
-      for (final filePath in newFilePaths) {
-        _extractingMetadata[filePath] = true;
-      }
-    });
+    if (mounted) {
+      setState(() {
+        for (final filePath in newFilePaths) {
+          _extractingMetadata[filePath] = true;
+        }
+      });
+    }
 
     try {
       _logger.i('📋 Extracting metadata for ${newFilePaths.length} file(s)...');
 
-      // Use batch extraction for instant processing
+      // Use batch extraction: first get list of paths, then call metadata extractor with that list
       final songs = await MusicFeatureAnalyzer.extractMetadataBatch(
         newFilePaths,
       );
@@ -439,7 +542,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
         final List<SongModel> validSongs = [];
 
-        // Validate and add songs
+        // Validate and add songs (process result line by line)
         for (int i = 0; i < songs.length; i++) {
           final song = songs[i];
           final filePath = newFilePaths[i];
@@ -452,37 +555,37 @@ class _HomeScreenState extends State<HomeScreen> {
             _logger.w('⚠️ Invalid or null metadata for: $filePath');
           }
 
-          // Update extraction status
           setState(() {
             _extractingMetadata[filePath] = false;
           });
         }
 
-        // Add all valid songs at once
+        // After result: show the list of songs
         if (validSongs.isNotEmpty) {
           setState(() {
             _songs.addAll(validSongs);
+            _isLoadingMetadata = false;
           });
 
           _logger.i('✅ Successfully added ${validSongs.length} song(s)');
 
-          // Automatically trigger background feature extraction after successful metadata extraction
-          if (_isInitialized && validSongs.isNotEmpty) {
+          if (_isInitialized) {
             _logger.i(
               '🚀 Starting background feature extraction for ${validSongs.length} song(s)...',
             );
             _extractFeaturesInBackgroundForSongs(validSongs);
-          } else if (!_isInitialized) {
+          } else {
             _logger.w(
               '⚠️ Analyzer not initialized - features will be extracted after initialization',
             );
-            // Retry initialization and then extract features
             _initializeAnalyzer().then((_) {
               if (_isInitialized && validSongs.isNotEmpty) {
                 _extractFeaturesInBackgroundForSongs(validSongs);
               }
             });
           }
+        } else {
+          setState(() => _isLoadingMetadata = false);
         }
       }
     } catch (e) {
@@ -492,6 +595,7 @@ class _HomeScreenState extends State<HomeScreen> {
           for (final filePath in newFilePaths) {
             _extractingMetadata[filePath] = false;
           }
+          _isLoadingMetadata = false;
         });
       }
       _showSnackBar('Error extracting metadata: $e', Colors.red);
@@ -651,6 +755,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (features.danceability < 0 || features.danceability > 1) {
       _logger.w('⚠️ Invalid danceability: ${features.danceability}');
+      return false;
+    }
+
+    if (features.loudness < 0 || features.loudness > 1) {
+      _logger.w('⚠️ Invalid loudness: ${features.loudness}');
       return false;
     }
 
@@ -914,7 +1023,7 @@ class _HomeScreenState extends State<HomeScreen> {
       'Signal Processing - Tempo BPM: ${features.tempoBpm.toStringAsFixed(1)}, Beat Strength: ${features.beatStrength.toStringAsFixed(3)}, Signal Energy: ${features.signalEnergy.toStringAsFixed(3)}',
     );
     _logger.d(
-      'Brightness: ${features.brightness.toStringAsFixed(3)}, Danceability: ${features.danceability.toStringAsFixed(3)}',
+      'Brightness: ${features.brightness.toStringAsFixed(3)}, Danceability: ${features.danceability.toStringAsFixed(3)}, Loudness: ${features.loudness.toStringAsFixed(3)}',
     );
     _logger.d(
       'Combined Metrics - Overall Energy: ${features.overallEnergy.toStringAsFixed(3)}, Intensity: ${features.intensity.toStringAsFixed(3)}',

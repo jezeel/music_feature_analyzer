@@ -45,8 +45,7 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-	
-	<!-- Music Feature Analyzer Permissions -->
+
 	<key>NSAppleMusicUsageDescription</key>
 	<string>This app needs access to your music library to analyze audio files and extract metadata.</string>
 	<key>NSMediaLibraryUsageDescription</key>

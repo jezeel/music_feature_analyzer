@@ -202,8 +202,7 @@ class NativeMetadataService {
         _logger.w('getAlbumArt returned unexpected type: ${result.runtimeType}');
         return null;
       }
-      
-      _logger.i('getAlbumArt succeeded - ${albumArtData.length} bytes');
+
       return albumArtData;
     } on PlatformException catch (e) {
       _logger.e('PlatformException in getAlbumArt: ${e.code} - ${e.message}', error: e);

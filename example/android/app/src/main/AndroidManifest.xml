@@ -1,13 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Storage Permissions (Android 6.0 - 12) -->
+    <!-- Network -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Storage: Android 6 (API 23) - 12 (API 32). Runtime request via Permission.storage in app. -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
-    
-    <!-- Media Permissions (Android 13+) -->
+
+    <!-- Media: Android 13+ (API 33+). Runtime request via Permission.audio in app. -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-    
-    <!-- Optional: For accessing media location (Android 10+) -->
+
+    <!-- Optional: media location (Android 10+) -->
     <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
     
     <application

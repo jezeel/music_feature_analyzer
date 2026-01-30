@@ -263,7 +263,7 @@ class MetadataExtractor {
       if (song.title.isEmpty || song.title == 'Unknown Title') validationIssues.add('Title is missing');
       if (song.artist.isEmpty || song.artist == 'Unknown Artist') validationIssues.add('Artist is missing');
       if (validationIssues.isNotEmpty) {
-        _logger.w('Metadata validation: ${validationIssues.join(", ")}');
+        _logger.d('Metadata validation: ${validationIssues.join(", ")}');
       }
 
       return song;
