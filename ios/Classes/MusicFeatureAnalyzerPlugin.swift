@@ -91,8 +91,8 @@ public class MusicFeatureAnalyzerPlugin: NSObject, FlutterPlugin {
                     metadata["duration"] = nil
                 }
 
-                let common = extractCommonMetadata(from: asset)
-                metadata.merge(sanitizeMetadata(common)) { _, new in new }
+                let common = self.extractCommonMetadata(from: asset)
+                metadata.merge(self.sanitizeMetadata(common)) { _, new in new }
 
                 // estimatedDataRate is in bits/sec; convert to kbps for Dart contract
                 if let track = asset.tracks(withMediaType: .audio).first {
@@ -129,8 +129,7 @@ public class MusicFeatureAnalyzerPlugin: NSObject, FlutterPlugin {
                 metadata["artist"] = value
             case AVMetadataKey.commonKeyAlbumName.rawValue:
                 metadata["album"] = value
-            case AVMetadataKey.id3MetadataKeyAlbumArtist.rawValue,
-                 AVMetadataKey.iTunesMetadataKeyAlbumArtist.rawValue:
+            case "TPE2", AVMetadataKey.iTunesMetadataKeyAlbumArtist.rawValue:
                 metadata["albumArtist"] = value
             case AVMetadataKey.commonKeyType.rawValue:
                 if metadata["genre"] == nil { metadata["genre"] = value }
@@ -146,12 +145,11 @@ public class MusicFeatureAnalyzerPlugin: NSObject, FlutterPlugin {
             case AVMetadataKey.commonKeyCreator.rawValue,
                  AVMetadataKey.id3MetadataKeyComposer.rawValue:
                 metadata["composer"] = value
-            case AVMetadataKey.id3MetadataKeyWriter.rawValue:
+            case "TEXT":
                 metadata["writer"] = value
             case AVMetadataKey.id3MetadataKeyTrackNumber.rawValue:
                 if let trackInfo = value { metadata["trackNumber"] = extractTrackNumber(trackInfo) }
-            case AVMetadataKey.id3MetadataKeyDiscNumber.rawValue,
-                 AVMetadataKey.iTunesMetadataKeyDiscNumber.rawValue:
+            case "TPOS", AVMetadataKey.iTunesMetadataKeyDiscNumber.rawValue:
                 if let discInfo = value { metadata["discNumber"] = extractDiscNumber(discInfo) }
             default:
                 break
@@ -290,7 +288,7 @@ public class MusicFeatureAnalyzerPlugin: NSObject, FlutterPlugin {
                 return
             }
 
-            let mimeType = detectMimeType(from: imageData)
+            let mimeType = self.detectMimeType(from: imageData)
             DispatchQueue.main.async { result(mimeType) }
         }
     }
