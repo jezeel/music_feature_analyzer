@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [1.0.2] - 2026-01-31
+
+### Changed
+
+- **Album art optimization** — Timeout increased from 5s to 15s so large embedded art or slow devices can finish. On timeout or any error the original image is used with no log. Removed warnings for "album art data too small", "optimization failed", and "external search failed" so fallbacks are silent.
+- **Logging** — Removed "getAlbumArt succeeded" info log from `NativeMetadataService`. Metadata validation (e.g. "Artist is missing") now logs only at debug level when `_enableDebugLogs` is false.
+- **iOS (Swift)** — Fixed Swift compiler errors on newer Xcode/iOS SDK: explicit `self.` in closures (`extractCommonMetadata`, `sanitizeMetadata`, `detectMimeType`); replaced iOS-unavailable `AVMetadataKey` ID3 members with string literals (`TPE2` album artist, `TEXT` writer, `TPOS` disc number) for compatibility.
+- **Pub.dev** — Added `flutter: ">=3.0.0"` to `environment` in `pubspec.yaml` so package validation passes (required for `flutter.plugin.platforms`).
+
+### Technical
+
+- Method channel: `com.music_feature_analyzer/audio_metadata`
+- Flutter 3.0.0+, Dart 3.8.1+
+- Android API 21+, iOS 12.0+
+
+---
+
 ## [1.0.1] - 2026-01-29
 
 **Stable release.** Song metadata extraction and AI feature analysis for Flutter (Android & iOS).

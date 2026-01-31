@@ -35,7 +35,7 @@ class MusicFeatureAnalyzerPlugin : FlutterPlugin, MethodCallHandler {
                 "loadingMode" to loadingMode.name,
                 "handlerSet" to true,
                 "platform" to "Android",
-                "pluginVersion" to "1.0.1"
+                "pluginVersion" to "1.0.2"
             )
             result.success(response)
             return

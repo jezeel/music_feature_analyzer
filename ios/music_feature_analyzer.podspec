@@ -4,7 +4,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'music_feature_analyzer'
-  s.version          = '1.0.1'
+  s.version          = '1.0.2'
   s.summary          = 'Extract song metadata and AI music features from audio files'
   s.description      = <<-DESC
 Flutter plugin to get song metadata (title, artist, album, duration, bitrate, album art, genre, etc.) and AI-powered music features from audio files. Supports Android and iOS.

@@ -1,6 +1,6 @@
 name: music_feature_analyzer
 description: Flutter package to extract song metadata and AI-powered music features from audio files. Get title, artist, album, duration, bitrate, album art, genre, and more on Android & iOS.
-version: 1.0.1
+version: 1.0.2
 
 topics:
   - audio

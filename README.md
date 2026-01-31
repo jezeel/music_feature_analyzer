@@ -10,7 +10,7 @@ Extract title, artist, album, duration, bitrate, album art, genre, year, and mor
 
 ```yaml
 dependencies:
-  music_feature_analyzer: ^1.0.1
+  music_feature_analyzer: ^1.0.2
 ```
 
 ```bash

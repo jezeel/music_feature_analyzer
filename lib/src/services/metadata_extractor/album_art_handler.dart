@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
@@ -94,15 +95,16 @@ class AlbumArtHandler {
     return null;
   }
 
-  /// Optimize album art using isolate for heavy processing
+  /// Optimize album art using isolate for heavy processing.
+  /// Timeout is 15s; on timeout or any error the original image is used with no log.
   static Future<Uint8List?> optimizeAlbumArt(Uint8List imageData) async {
     try {
-      final optimized = await compute(_optimizeAlbumArtIsolate, imageData).timeout(
-        const Duration(seconds: 5),
-      );
+      const timeout = Duration(seconds: 15);
+      final optimized = await compute(_optimizeAlbumArtIsolate, imageData).timeout(timeout);
       return optimized ?? imageData;
-    } catch (e, stackTrace) {
-      _logger.e('Error optimizing album art', error: e, stackTrace: stackTrace);
+    } on TimeoutException {
+      return imageData;
+    } catch (_) {
       return imageData;
     }
   }
