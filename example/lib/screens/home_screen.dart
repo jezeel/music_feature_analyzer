@@ -656,16 +656,33 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     });
 
+    // Build required duration map (skip songs without duration)
+    final durationMsByPath = <String, int>{};
+    for (final s in songs) {
+      if (s.duration > 0) durationMsByPath[s.filePath] = s.duration;
+    }
+    final filePaths = songs.map((s) => s.filePath).toList();
+    final pathsWithDuration = filePaths.where((p) => durationMsByPath[p] != null && durationMsByPath[p]! > 0).toList();
+    if (pathsWithDuration.isEmpty) {
+      _logger.w('⚠️ No songs with valid duration for feature extraction');
+      setState(() {
+        for (final song in songs) {
+          _extractingFeatures[song.id] = false;
+        }
+      });
+      return;
+    }
+
     // Extract features in background without blocking UI
     Future.microtask(() async {
       try {
-        final filePaths = songs.map((s) => s.filePath).toList();
         _logger.i(
-          '🎵 Starting background feature extraction for ${filePaths.length} song(s)...',
+          '🎵 Starting background feature extraction for ${pathsWithDuration.length} song(s)...',
         );
 
         await MusicFeatureAnalyzer.extractFeaturesInBackground(
-          filePaths,
+          pathsWithDuration,
+          durationMsByPath: durationMsByPath,
           onProgress: (current, total) {
             _logger.d('📊 Feature extraction progress: $current/$total');
           },
@@ -874,10 +891,26 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      _logger.i('🎵 Extracting features for ${validSongs.length} song(s)');
+      final filePaths = validSongs.map((s) => s.filePath).toList();
+      final durationMsByPath = <String, int>{};
+      for (final s in validSongs) {
+        if (s.duration > 0) durationMsByPath[s.filePath] = s.duration;
+      }
+      final pathsWithDuration = filePaths.where((p) => durationMsByPath[p] != null && durationMsByPath[p]! > 0).toList();
+      if (pathsWithDuration.isEmpty) {
+        _showSnackBar('Songs need duration for feature extraction', Colors.orange);
+        setState(() {
+          _isProcessingFeatures = false;
+          for (final song in validSongs) _extractingFeatures[song.id] = false;
+        });
+        return;
+      }
+
+      _logger.i('🎵 Extracting features for ${pathsWithDuration.length} song(s)');
 
       await MusicFeatureAnalyzer.extractFeaturesInBackground(
-        validSongs.map((s) => s.filePath).toList(),
+        pathsWithDuration,
+        durationMsByPath: durationMsByPath,
         onProgress: (current, total) {
           _logger.d('📊 Progress: $current/$total');
         },

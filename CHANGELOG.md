@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [1.0.3] - 2026-02-04
+
+### Added
+
+- **Three long segments (6 s each)** — For songs with duration ≥ 30 s, analysis now uses three 6-second segments from the middle of each third (D/6, D/2, 5D/6) instead of three short 0.975 s clips. All signal features (tempo, beat, energy, loudness, danceability, spectral, etc.) are computed from the full 6 s per segment for better accuracy on 4–5 minute songs.
+- **Onset + FFT tempo and beat** — For long segments (≥ 32k samples), tempo (BPM) and beat strength are derived from an onset-strength curve and its FFT, improving stability compared to autocorrelation on sub-second windows.
+- **Single FFmpeg run for 3 segments** — `extractThreeLongSegmentsBatchOnMain` extracts all three long segments in one FFmpeg run to keep processing fast.
+- **Defensive empty-audio check** — Feature extraction now returns `null` when audio data is null or empty to avoid runtime errors.
+
+### Changed
+
+- **`durationMsByPath` is now required** — `extractFeaturesInBackground()` no longer auto-fetches duration from metadata. Callers must pass a `Map<String, int>` mapping each file path to its duration in milliseconds. This avoids per-file metadata reads and ensures correct segment positions for long songs.
+- **YAMNet input unchanged** — YAMNet still receives the first 0.975 s of each segment (15,600 samples). All other features use the full 6 s segment.
+- **Spectral features on long segments** — Spectral centroid and rolloff use a middle 1024-sample window of each long segment for a representative spectrum.
+- **Bass ratio performance** — For segments longer than 1024 samples, bass ratio uses a 1024-sample window instead of the full waveform to avoid O(n²) cost and keep the background isolate responsive.
+- **README and docs** — Expanded README with full API summary, examples, supported platforms, and version 1.0.3. Added package-level `analysis_options.yaml` for static analysis.
+
+### Technical
+
+- Method channel: `com.music_feature_analyzer/audio_metadata`
+- Flutter 3.0.0+, Dart 3.8.1+
+- Android API 21+, iOS 12.0+
+- Supported platforms: Android and iOS only (no desktop or web).
+
+---
+
 ## [1.0.2] - 2026-01-31
 
 ### Changed

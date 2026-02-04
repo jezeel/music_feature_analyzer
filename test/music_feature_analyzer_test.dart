@@ -57,7 +57,7 @@ void main() {
       expect(features.analyzedAt, isA<DateTime>());
     });
 
-    test('extractFeaturesInBackground accepts optional durationMsByPath', () {
+    test('extractFeaturesInBackground requires durationMsByPath', () {
       final filePaths = ['/a.mp3', '/b.mp3'];
       final durationMsByPath = <String, int>{'/a.mp3': 180000, '/b.mp3': 240000};
       expect(filePaths.length, 2);

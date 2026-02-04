@@ -1488,6 +1488,74 @@ class FeatureExtractor {
     ];
   }
 
+  /// Three long segments (6s each) centered at middle of each third: D/6, D/2, 5D/6.
+  /// Returns list of 6 values: [start1, dur1, start2, dur2, start3, dur3] in seconds.
+  static List<double> getThreeLongSegmentStartAndDurationSeconds(int durationMs) {
+    if (durationMs <= 0) return [];
+    final totalSec = durationMs / 1000.0;
+    const longDur = 6.0;
+    if (totalSec < longDur) return [];
+    final centers = [totalSec / 6, totalSec / 2, totalSec * 5 / 6];
+    final result = <double>[];
+    for (final c in centers) {
+      final start = math.max(0.0, c - longDur / 2);
+      final dur = math.min(longDur, totalSec - start);
+      if (dur < 1.0) continue;
+      result.add(start);
+      result.add(dur);
+    }
+    return result.length >= 6 ? result : [];
+  }
+
+  /// Extract 3 long segments (6s each) from middle of each third in one FFmpeg run.
+  /// All features (tempo, beat, energy, loudness, etc.) are computed from each long segment for accuracy.
+  /// Returns list of 3 Float32Lists or null on failure.
+  static Future<List<Float32List>?> extractThreeLongSegmentsBatchOnMain(String filePath, int durationMs) async {
+    final params = getThreeLongSegmentStartAndDurationSeconds(durationMs);
+    if (params.length < 6) return null;
+    final s1 = params[0];
+    final d1 = params[1];
+    final s2 = params[2];
+    final d2 = params[3];
+    final s3 = params[4];
+    final d3 = params[5];
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final base = tempDir.path;
+      final epoch = DateTime.now().millisecondsSinceEpoch;
+      final out1 = '$base/long_${epoch}_1.raw';
+      final out2 = '$base/long_${epoch}_2.raw';
+      final out3 = '$base/long_${epoch}_3.raw';
+      final e1 = s1 + d1;
+      final e2 = s2 + d2;
+      final e3 = s3 + d3;
+      final filter = '[0:a]atrim=${s1.toStringAsFixed(3)}:${e1.toStringAsFixed(3)},aresample=16000,aformat=sample_fmts=s16[o1];'
+          '[0:a]atrim=${s2.toStringAsFixed(3)}:${e2.toStringAsFixed(3)},aresample=16000,aformat=sample_fmts=s16[o2];'
+          '[0:a]atrim=${s3.toStringAsFixed(3)}:${e3.toStringAsFixed(3)},aresample=16000,aformat=sample_fmts=s16[o3]';
+      final command = '-y -i "$filePath" -filter_complex "$filter" -map "[o1]" "$out1" -map "[o2]" "$out2" -map "[o3]" "$out3"';
+      final session = await FFmpegKit.execute(command);
+      final returnCode = await session.getReturnCode();
+      if (!ReturnCode.isSuccess(returnCode)) return null;
+      final f1 = File(out1);
+      final f2 = File(out2);
+      final f3 = File(out3);
+      if (!await f1.exists() || !await f2.exists() || !await f3.exists()) return null;
+      final b1 = await f1.readAsBytes();
+      final b2 = await f2.readAsBytes();
+      final b3 = await f3.readAsBytes();
+      await f1.delete();
+      await f2.delete();
+      await f3.delete();
+      return [
+        _rawBytesToFloat32List(b1),
+        _rawBytesToFloat32List(b2),
+        _rawBytesToFloat32List(b3),
+      ];
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Extract all 3 segments in one FFmpeg run (faster than 3 separate runs).
   /// Must be called from the main isolate (uses FFmpegKit platform channel).
   /// Returns list of 3 Float32List or empty on failure; falls back to null to use single-segment path.

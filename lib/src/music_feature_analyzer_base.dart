@@ -26,10 +26,10 @@ import 'services/metadata_extractor/native_metadata_service.dart';
 /// 
 /// ANALYSIS BEHAVIOUR:
 /// - Short songs or when duration is unknown: one short segment (~0.975 s) from the middle.
-/// - When duration is known and >= 30 s: three segments at the middle of each third (D/6, D/2, 5D/6)
-///   are analysed; numeric features are averaged, categorical (genre, mood) use the highest-confidence segment.
-/// Duration is auto-fetched from metadata when you call [extractFeaturesInBackground] without
-/// [durationMsByPath], using the existing [MetadataExtractor].
+/// - When duration is known and >= 30 s: three long segments (6 s each) from the middle of each third
+///   (D/6, D/2, 5D/6) in one FFmpeg run. YAMNet uses the first 0.975 s of each; all other features
+///   (tempo, beat, energy, loudness, danceability, spectral, etc.) use the full 6 s for accuracy.
+/// [extractFeaturesInBackground] requires [durationMsByPath] (no per-file metadata fetch).
 /// 
 /// USAGE:
 /// 1. Initialize: await MusicFeatureAnalyzer.initialize()
@@ -83,21 +83,26 @@ class MusicFeatureAnalyzer {
     }
   }
 
-  /// Analyze a single song
+  /// Analyze a single song.
+  /// Uses the same isolate-based path as [extractFeaturesInBackground] so YAMNet and signal
+  /// processing run off the main isolate and do not block the UI.
   static Future<ExtractedSongFeatures?> analyzeSong(SongModel song) async {
     if (!_isInitialized || _extractor == null) {
       _logger.e('Analyzer not initialized. Call initialize() first.');
       return null;
     }
     try {
-      return await _extractor!.extractSongFeatures(song);
+      final durationMs = song.duration > 0 ? song.duration : null;
+      return await _extractFeaturesInIsolate(song.filePath, durationMs: durationMs);
     } catch (e) {
       _logger.e('Error analyzing song: $e', error: e);
       return null;
     }
   }
 
-  /// Analyze multiple songs
+  /// Analyze multiple songs.
+  /// Uses the same isolate-based path as [extractFeaturesInBackground]; yields to the UI
+  /// between each song so the UI stays responsive.
   static Future<List<ExtractedSongFeatures?>> analyzeSongs(List<SongModel> songs) async {
     if (!_isInitialized || _extractor == null) {
       _logger.e('Analyzer not initialized. Call initialize() first.');
@@ -105,12 +110,12 @@ class MusicFeatureAnalyzer {
     }
     try {
       final results = <ExtractedSongFeatures?>[];
-      
       for (final song in songs) {
-        final features = await _extractor!.extractSongFeatures(song);
+        final durationMs = song.duration > 0 ? song.duration : null;
+        final features = await _extractFeaturesInIsolate(song.filePath, durationMs: durationMs);
         results.add(features);
+        await Future.delayed(Duration.zero);
       }
-      
       return results;
     } catch (e) {
       _logger.e('Error analyzing songs: $e', error: e);
@@ -157,13 +162,14 @@ class MusicFeatureAnalyzer {
 
   /// Extract features in background with isolate-based processing.
   ///
-  /// Runs in a separate isolate so the UI stays responsive; each song can take several seconds.
-  /// [durationMsByPath] is optional: when null, duration is auto-fetched from file metadata for each path
-  /// (so you do not need to pass it). Pass it only when you already have durations (e.g. from your own metadata)
-  /// to avoid an extra metadata read per file.
+  /// UI impact: Audio extraction (FFmpeg) runs on the main isolate (platform channel requirement).
+  /// YAMNet and all signal processing run in a separate isolate via [compute], so they do not block the UI.
+  /// After each song, [Future.delayed(Duration.zero)] yields so the UI can update. Callbacks run on main isolate.
+  ///
+  /// [durationMsByPath] is required: map each file path to its duration in milliseconds.
   static Future<Map<String, ExtractedSongFeatures?>> extractFeaturesInBackground(
     List<String> filePaths, {
-    Map<String, int>? durationMsByPath,
+    required Map<String, int> durationMsByPath,
     Function(int current, int total)? onProgress,
     Function(String filePath, ExtractedSongFeatures? features)? onSongUpdated,
     Function()? onCompleted,
@@ -654,17 +660,22 @@ class MusicFeatureAnalyzer {
     return (signalEnergy * 0.6 + tempoComponent * 0.4).clamp(0.0, 1.0);
   }
 
-  /// Calculate signal features in isolate (SAME AS ORIGINAL)
+  /// Calculate signal features in isolate. For long segments (>= 32k samples) uses onset+FFT for tempo/beat.
   static SignalFeatures _calculateSignalFeaturesInIsolate(Float32List audioData) {
     try {
-      // Calculate energy
+      const longSegmentMinSamples = 32000; // ~2s at 16kHz; use onset+FFT for better accuracy
+      final useLongSegmentTempoBeat = audioData.length >= longSegmentMinSamples;
+
+      // Calculate energy (full segment)
       final energy = _calculateEnergyInIsolate(audioData);
-      
-      // Calculate tempo (simplified autocorrelation)
-      final tempoBpm = _calculateTempoInIsolate(audioData);
-      
-      // Calculate beat strength
-      final beatStrength = _calculateBeatStrengthInIsolate(audioData);
+
+      // Tempo and beat: onset+FFT for long segments, else autocorrelation/flux
+      final tempoBpm = useLongSegmentTempoBeat
+          ? _calculateTempoFromOnsetFFTInIsolate(audioData)
+          : _calculateTempoInIsolate(audioData);
+      final beatStrength = useLongSegmentTempoBeat
+          ? _calculateBeatStrengthFromOnsetInIsolate(audioData)
+          : _calculateBeatStrengthInIsolate(audioData);
       
       // Calculate spectral features
       final spectralCentroid = _calculateSpectralCentroidInIsolate(audioData);
@@ -878,11 +889,99 @@ class MusicFeatureAnalyzer {
     }
   }
 
-  /// Calculate spectral centroid in isolate (SAME AS ORIGINAL)
+  /// Build onset strength curve (spectral flux per frame) for long segment. Used for accurate tempo/beat.
+  static List<double> _onsetStrengthCurveInIsolate(Float32List audioData) {
+    const windowSize = 1024;
+    const hopSize = 512;
+    if (audioData.length < windowSize * 2) return [];
+    final curve = <double>[];
+    List<double>? prevMag;
+    for (int i = 0; i <= audioData.length - windowSize; i += hopSize) {
+      final window = audioData.sublist(i, i + windowSize);
+      final windowed = _applyHannWindowInIsolate(Float32List.fromList(window));
+      final fft = _performFFTInIsolate(windowed);
+      final mag = _calculateMagnitudeSpectrumFromFFTInIsolate(fft);
+      if (prevMag != null && mag.length == prevMag.length) {
+        double flux = 0.0;
+        for (int j = 0; j < mag.length; j++) {
+          final d = mag[j] - prevMag[j];
+          if (d > 0) flux += d;
+        }
+        curve.add(flux);
+      }
+      prevMag = mag;
+    }
+    return curve;
+  }
+
+  /// Tempo (BPM) from long segment via onset-strength FFT. More accurate than autocorrelation on <1s.
+  static double _calculateTempoFromOnsetFFTInIsolate(Float32List longAudio) {
+    const sampleRate = 16000.0;
+    const hopSize = 512;
+    const minBpm = 60.0;
+    const maxBpm = 180.0;
+    final curve = _onsetStrengthCurveInIsolate(longAudio);
+    if (curve.length < 32) return 120.0;
+    final n = curve.length;
+    final fftSize = _nextPowerOf2InIsolate(n);
+    final padded = Float32List(fftSize);
+    for (int i = 0; i < n; i++) padded[i] = curve[i];
+    final fft = _performFFTInIsolate(padded);
+    final mag = _calculateMagnitudeSpectrumFromFFTInIsolate(fft);
+    final half = mag.length;
+    double bestBpm = 120.0;
+    double bestMag = 0.0;
+    for (int k = 1; k < half; k++) {
+      final bpm = 60.0 * sampleRate * k / (fftSize * hopSize);
+      if (bpm >= minBpm && bpm <= maxBpm) {
+        final m = mag[k];
+        if (m > bestMag) {
+          bestMag = m;
+          bestBpm = bpm;
+        }
+      }
+    }
+    return bestMag > 0 ? bestBpm : 120.0;
+  }
+
+  /// Beat strength (0-1) from long segment: normalized peak strength of tempo FFT in BPM range.
+  static double _calculateBeatStrengthFromOnsetInIsolate(Float32List longAudio) {
+    const sampleRate = 16000.0;
+    const hopSize = 512;
+    const minBpm = 60.0;
+    const maxBpm = 180.0;
+    final curve = _onsetStrengthCurveInIsolate(longAudio);
+    if (curve.length < 32) return 0.5;
+    final n = curve.length;
+    final fftSize = _nextPowerOf2InIsolate(n);
+    final padded = Float32List(fftSize);
+    for (int i = 0; i < n; i++) padded[i] = curve[i];
+    final fft = _performFFTInIsolate(padded);
+    final mag = _calculateMagnitudeSpectrumFromFFTInIsolate(fft);
+    final half = mag.length;
+    double maxInRange = 0.0;
+    double maxOverall = 0.0;
+    for (int k = 1; k < half; k++) {
+      final bpm = 60.0 * sampleRate * k / (fftSize * hopSize);
+      if (bpm >= minBpm && bpm <= maxBpm && mag[k] > maxInRange) maxInRange = mag[k];
+      if (mag[k] > maxOverall) maxOverall = mag[k];
+    }
+    if (maxOverall <= 0) return 0.5;
+    return (maxInRange / maxOverall).clamp(0.0, 1.0);
+  }
+
+  /// Calculate spectral centroid in isolate. Uses middle window for long segments.
   static double _calculateSpectralCentroidInIsolate(Float32List audioData) {
     try {
-      final windowSize = math.min(1024, audioData.length);
-      final window = audioData.take(windowSize).toList();
+      const windowSize = 1024;
+      if (audioData.length < 64) return 2000.0;
+      final List<double> window;
+      if (audioData.length > windowSize * 2) {
+        final start = (audioData.length - windowSize) ~/ 2;
+        window = audioData.sublist(start, start + windowSize).toList();
+      } else {
+        window = audioData.take(windowSize).toList();
+      }
       
       if (window.length < 64) {
         return 2000.0; // Default value
@@ -912,11 +1011,18 @@ class MusicFeatureAnalyzer {
     }
   }
 
-  /// Calculate spectral rolloff in isolate (SAME AS ORIGINAL)
+  /// Calculate spectral rolloff in isolate. Uses middle window for long segments.
   static double _calculateSpectralRolloffInIsolate(Float32List audioData) {
     try {
-      final windowSize = math.min(1024, audioData.length);
-      final window = audioData.take(windowSize).toList();
+      const windowSize = 1024;
+      if (audioData.length < 64) return 4000.0;
+      final List<double> window;
+      if (audioData.length > windowSize * 2) {
+        final start = (audioData.length - windowSize) ~/ 2;
+        window = audioData.sublist(start, start + windowSize).toList();
+      } else {
+        window = audioData.take(windowSize).toList();
+      }
       
       if (window.length < 64) {
         return 4000.0; // Default value
@@ -1112,7 +1218,15 @@ class MusicFeatureAnalyzer {
 
   static double _calculateBassRatioInIsolate(Float32List waveform) {
     try {
-      final windowed = _applyHannWindowInIsolate(waveform);
+      const maxWindow = 1024;
+      final Float32List toUse;
+      if (waveform.length > maxWindow) {
+        final start = (waveform.length - maxWindow) ~/ 2;
+        toUse = Float32List.sublistView(waveform, start, start + maxWindow);
+      } else {
+        toUse = waveform;
+      }
+      final windowed = _applyHannWindowInIsolate(toUse);
       final magnitudeSpectrum = _calculateMagnitudeSpectrumInIsolate(windowed);
       if (magnitudeSpectrum.isEmpty) return 0.25;
       final lowLen = (magnitudeSpectrum.length / 4).clamp(1.0, magnitudeSpectrum.length.toDouble()).toInt();
@@ -1202,39 +1316,28 @@ class MusicFeatureAnalyzer {
     return _categorizeMoodInIsolate(moodTags);
   }
 
-  /// Process songs with UI responsiveness using proper async scheduling (same as original).
-  /// When [durationMsByPath] is null, duration is auto-fetched from metadata for each file (using [MetadataExtractor]).
+  /// Process songs with UI responsiveness. [durationMsByPath] is required (no metadata fetch).
   static Future<Map<String, ExtractedSongFeatures?>> _processSongsWithUIResponsiveness(
     List<String> filePaths,
     Function(String filePath, ExtractedSongFeatures? features)? onSongUpdated,
     Function(int current, int total)? onProgress, {
-    Map<String, int>? durationMsByPath,
+    required Map<String, int> durationMsByPath,
   }) async {
     final results = <String, ExtractedSongFeatures?>{};
-    // Auto-fill duration from metadata when not provided (so caller doesn't need durationMsByPath)
-    Map<String, int>? effectiveDurations = durationMsByPath;
-    if (effectiveDurations == null) {
-      effectiveDurations = {};
-      await MetadataExtractor.initialize();
-      final metaList = await Future.wait(filePaths.map((p) => MetadataExtractor.extractMetadata(p)));
-      for (var i = 0; i < filePaths.length; i++) {
-        final song = metaList[i];
-        if (song != null && song.duration > 0) {
-          effectiveDurations[filePaths[i]] = song.duration;
-        }
-      }
-    }
-    
+
     for (int i = 0; i < filePaths.length; i++) {
       final filePath = filePaths[i];
-      final durationMs = effectiveDurations[filePath];
-      
-      try {
-        // Call progress callback
+      final durationMs = durationMsByPath[filePath];
+      if (durationMs == null || durationMs <= 0) {
+        _logger.w('Skipping ${_getFileName(filePath)}: duration missing or invalid in durationMsByPath');
+        results[filePath] = null;
+        onSongUpdated?.call(filePath, null);
         onProgress?.call(i + 1, filePaths.length);
-        
-        
-        // Use isolate for heavy processing (audio + 3-part analysis when duration available)
+        continue;
+      }
+
+      try {
+        onProgress?.call(i + 1, filePaths.length);
         final features = await _extractFeaturesInIsolate(filePath, durationMs: durationMs);
         
         results[filePath] = features;
@@ -1279,18 +1382,23 @@ class MusicFeatureAnalyzer {
       List<Float32List>? preExtractedAudios;
 
       if (duration >= minDurationForThreePartMs) {
-        final startTimes = FeatureExtractor.getThreePartStartTimesSeconds(duration);
-        if (startTimes.length >= 3) {
-          // Prefer single FFmpeg run for 3 segments (faster than 3 separate runs)
-          List<Float32List>? segments = await FeatureExtractor.extractThreeSegmentsBatchOnMain(filePath, startTimes);
-          if (segments == null || segments.length < 3) {
-            segments = <Float32List>[];
-            for (final startSec in startTimes) {
-              final audio = await FeatureExtractor.extractSegmentAtStartOnMain(filePath, startSec);
-              if (audio != null) segments.add(audio);
+        // Prefer 3 long segments (6s each) from middle of each third: all features from long segments for accuracy
+        final longSegments = await FeatureExtractor.extractThreeLongSegmentsBatchOnMain(filePath, duration);
+        if (longSegments != null && longSegments.length == 3) {
+          preExtractedAudios = longSegments;
+        } else {
+          final startTimes = FeatureExtractor.getThreePartStartTimesSeconds(duration);
+          if (startTimes.length >= 3) {
+            List<Float32List>? segments = await FeatureExtractor.extractThreeSegmentsBatchOnMain(filePath, startTimes);
+            if (segments == null || segments.length < 3) {
+              segments = <Float32List>[];
+              for (final startSec in startTimes) {
+                final audio = await FeatureExtractor.extractSegmentAtStartOnMain(filePath, startSec);
+                if (audio != null) segments.add(audio);
+              }
             }
+            if (segments.isNotEmpty) preExtractedAudios = segments;
           }
-          if (segments.isNotEmpty) preExtractedAudios = segments;
         }
       }
       if (preExtractedAudios == null) {
@@ -1335,14 +1443,15 @@ class MusicFeatureAnalyzer {
         filePath: input.filePath,
         features: null,
       );
-      if (input.preExtractedAudios != null && input.preExtractedAudios!.isNotEmpty) {
-        // Single interpreter for all segments to avoid "Computation ended without result"
+      // When 3-part: each segment is long (6s). YAMNet uses first 0.975s; all signal features from full segment.
+      final segments = input.preExtractedAudios;
+      if (segments != null && segments.isNotEmpty) {
         Interpreter? interpreter;
         try {
           interpreter = Interpreter.fromBuffer(input.yamnetModelBytes);
           final parts = <ExtractedSongFeatures>[];
           const segmentTimeout = Duration(seconds: 60);
-          for (final audioData in input.preExtractedAudios!) {
+          for (final audioData in segments) {
             final partFeatures = await _extractFeaturesWithPreloadedData(
               song,
               interpreter,
@@ -1452,14 +1561,12 @@ class MusicFeatureAnalyzer {
     Float32List? audioData,
   ) async {
     try {
-      // Use pre-processed audio data
-      if (audioData == null) {
+      if (audioData == null || audioData.isEmpty) {
         _logger.w('No pre-processed audio for: ${song.title}');
         return null;
       }
 
-      
-      // Run YAMNet inference (SAME AS ORIGINAL)
+      // Run YAMNet inference (uses first 15,600 samples; full audioData used for signal features)
       final yamnetResults = await _runYAMNetInference(interpreter, audioData);
       
       // Process YAMNet results
@@ -1631,7 +1738,7 @@ class IsolateInputData {
   final String fileName;
   /// Single segment (used when duration < 30s or fallback). Extracted on main thread.
   final Float32List? preExtractedAudio;
-  /// Multiple segments for 3-part analysis (duration >= 30s). Extracted on main thread.
+  /// Multiple segments for 3-part analysis (duration >= 30s). Each can be long (6s) for accuracy.
   final List<Float32List>? preExtractedAudios;
 
   const IsolateInputData({

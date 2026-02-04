@@ -52,7 +52,7 @@ dependencies:
       url: https://github.com/jezeel/music_feature_analyzer.git
       ref: main
   # From pub.dev:
-  # music_feature_analyzer: ^1.0.2
+  # music_feature_analyzer: ^1.0.3
 ```
 **After pushing package updates to Git:** run `flutter pub upgrade music_feature_analyzer` (or `flutter clean` then `flutter pub get`) in the example so plugin registration picks up the latest version.
 
@@ -92,9 +92,12 @@ for (final s in songs) {
   if (s != null) results.add(await MusicFeatureAnalyzer.analyzeSong(s));
 }
 
-// Background processing (file paths only; duration is auto-fetched from metadata)
+// Background processing (durationMsByPath required: map each path to duration in ms)
+final filePaths = ['path/to/song1.mp3', 'path/to/song2.mp3'];
+final durationMsByPath = {'path/to/song1.mp3': 240000, 'path/to/song2.mp3': 180000};
 await MusicFeatureAnalyzer.extractFeaturesInBackground(
-  ['path/to/song1.mp3', 'path/to/song2.mp3'],
+  filePaths,
+  durationMsByPath: durationMsByPath,
   onProgress: (current, total) => print('$current / $total'),
   onSongUpdated: (filePath, features) => print('Updated: $filePath'),
   onCompleted: () => print('Done'),
@@ -211,7 +214,7 @@ AppLogger.error('Analysis failed: $error');
 - `MusicFeatureAnalyzer.extractMetadataBatch(filePaths)` — Batch metadata extraction
 - `MusicFeatureAnalyzer.analyzeSong(song)` — Analyze a single song (`SongModel`); returns `ExtractedSongFeatures?`
 - `MusicFeatureAnalyzer.analyzeSongs(songs)` — Analyze multiple songs
-- `MusicFeatureAnalyzer.extractFeaturesInBackground(filePaths, { durationMsByPath, onProgress, onSongUpdated, onCompleted, onError })` — Background processing (duration optional; auto-fetched from metadata)
+- `MusicFeatureAnalyzer.extractFeaturesInBackground(filePaths, durationMsByPath: ..., onProgress, onSongUpdated, onCompleted, onError)` — Background processing (durationMsByPath required)
 
 ### Utilities
 - `MusicFeatureAnalyzer.getStats()` — Analysis statistics

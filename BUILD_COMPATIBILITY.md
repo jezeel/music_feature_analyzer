@@ -6,7 +6,7 @@
 
 ```yaml
 dependencies:
-  music_feature_analyzer: ^1.0.2
+  music_feature_analyzer: ^1.0.3
 ```
 
 Then run:
@@ -31,6 +31,6 @@ dependencies:
       ref: main
 ```
 
-> **Note:** This is only for trying unreleased changes. Prefer **pub.dev** (`music_feature_analyzer: ^1.0.2`) for normal use.
+> **Note:** This is only for trying unreleased changes. Prefer **pub.dev** (`music_feature_analyzer: ^1.0.3`) for normal use.
 
 After pulling package updates from Git, run `flutter pub get` (or `flutter clean` then `flutter pub get`) so your app picks up the latest code.
