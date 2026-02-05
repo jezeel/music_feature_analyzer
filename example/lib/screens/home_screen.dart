@@ -656,7 +656,6 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     });
 
-    // Build required duration map (skip songs without duration)
     final durationMsByPath = <String, int>{};
     for (final s in songs) {
       if (s.duration > 0) durationMsByPath[s.filePath] = s.duration;

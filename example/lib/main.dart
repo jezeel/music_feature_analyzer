@@ -18,12 +18,12 @@ void main() async {
     if (analyzerInitialized) {
       logger.i('✅ Music Feature Analyzer initialized successfully');
 
-      // 🔍 OPTIONAL: Native plugin verification (TEMPORARY)
+      // 🔍 OPTIONAL: Native platform setup verification
       try {
-        final status = await MusicFeatureAnalyzer.verifyConnection();
-        logger.i('🔌 Native plugin status: $status');
+        final status = await MusicFeatureAnalyzer.verifyPlatformSetup();
+        logger.i('🔌 Platform setup: $status');
       } catch (e) {
-        logger.e('❌ Native plugin verifyConnection failed: $e');
+        logger.e('❌ Platform setup verification failed: $e');
       }
     } else {
       logger.w('⚠️ Music Feature Analyzer initialization failed');
